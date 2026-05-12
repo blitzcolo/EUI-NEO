@@ -507,8 +507,19 @@ private:
         return transformRect(rect, frame, transform);
     }
 
+    static Rect backdropCaptureRect(const LayoutRect& frame, float blur, const Transform& transform = {}) {
+        return visualRect(frame, Shadow{}, blur, transform);
+    }
+
     static Rect imageVisualRect(const LayoutRect& frame, const Transform& transform = {}) {
         return transformRect({frame.x, frame.y, frame.width, frame.height}, frame, transform);
+    }
+
+    static bool containsRect(const Rect& outer, const Rect& inner) {
+        return inner.x >= outer.x &&
+               inner.y >= outer.y &&
+               inner.x + inner.width <= outer.x + outer.width &&
+               inner.y + inner.height <= outer.y + outer.height;
     }
 
     static bool sameGradient(const Gradient& left, const Gradient& right) {
@@ -562,34 +573,46 @@ private:
             return;
         }
 
-        bool dirtyTouchesBackdropBlur = false;
-        forEachElement([&](const Element& element) {
-            if (dirtyTouchesBackdropBlur || element.kind != ElementKind::Rect) {
-                return;
-            }
+        Rect mergedDirty{};
+        bool hasMergedDirty = false;
+        for (const LogicalDirtyRect& dirty : dirtyRects_) {
+            const Rect dirtyRect{dirty.x, dirty.y, dirty.width, dirty.height};
+            mergedDirty = hasMergedDirty ? unionRect(mergedDirty, dirtyRect) : dirtyRect;
+            hasMergedDirty = true;
+        }
+        if (!hasMergedDirty) {
+            return;
+        }
 
-            const RectInstance& instance = rectInstance(element.id);
-            const float blur = std::max(element.blur, instance.blur.value());
-            if (blur <= 0.0f) {
-                return;
-            }
-
-            const LayoutRect frame = instance.frame.value();
-            const Rect captureRect = scaleRectFromCenter(
-                transformRect({frame.x, frame.y, frame.width, frame.height}, frame, instance.transform.value()),
-                1.2f);
-
-            for (const LogicalDirtyRect& dirty : dirtyRects_) {
-                const Rect dirtyRect{dirty.x, dirty.y, dirty.width, dirty.height};
-                if (intersects(captureRect, dirtyRect)) {
-                    dirtyTouchesBackdropBlur = true;
+        bool expandedAny = false;
+        bool expandedThisPass = false;
+        do {
+            expandedThisPass = false;
+            forEachElement([&](const Element& element) {
+                if (element.kind != ElementKind::Rect) {
                     return;
                 }
-            }
-        });
 
-        if (dirtyTouchesBackdropBlur) {
-            fullRedraw_ = true;
+                const RectInstance& instance = rectInstance(element.id);
+                const float blur = std::max(element.blur, instance.blur.value());
+                if (blur <= 0.0f) {
+                    return;
+                }
+
+                const Rect captureRect = backdropCaptureRect(instance.frame.value(), blur, instance.transform.value());
+                if (!intersects(captureRect, mergedDirty) || containsRect(mergedDirty, captureRect)) {
+                    return;
+                }
+
+                mergedDirty = unionRect(mergedDirty, captureRect);
+                expandedThisPass = true;
+                expandedAny = true;
+            });
+        } while (expandedThisPass);
+
+        if (expandedAny) {
+            dirtyRects_.clear();
+            dirtyRects_.push_back({mergedDirty.x, mergedDirty.y, mergedDirty.width, mergedDirty.height});
             needsRender_ = true;
         }
     }

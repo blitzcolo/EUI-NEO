@@ -1708,7 +1708,7 @@ const DslAppConfig& dslAppConfig() {
         .title("EUI Gallery")
         .pageId("gallery")
         .clearColor({0.07f, 0.08f, 0.10f, 1.0f})
-        .windowSize(1440, 1100)
+        .windowSize(1600, 1100)
         .fps(galleryFrameRateLimit());
     config.fps(galleryFrameRateLimit());
     return config;

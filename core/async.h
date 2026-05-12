@@ -99,8 +99,9 @@ Result<ResultValueType<Raw>> normalizeResult(Raw&& value) {
     }
 }
 
-template <typename Value, typename WorkFn, bool TakesToken>
+template <typename Value, typename WorkFn>
 Result<Value> invokeWork(WorkFn& work, const CancelToken& token) {
+    constexpr bool TakesToken = std::is_invocable_v<WorkFn, const CancelToken&>;
     if constexpr (TakesToken) {
         if constexpr (std::is_void_v<std::invoke_result_t<WorkFn, const CancelToken&>>) {
             work(token);
@@ -146,7 +147,7 @@ bool start(std::string key, bool restart, WorkFn work, ThenFn then) {
             return;
         }
 
-        Result<Value> result = invokeWork<Value, Work, takesToken>(work, token);
+        Result<Value> result = invokeWork<Value>(work, token);
         Status finalStatus = result.ok ? Status::Done : Status::Failed;
         if (token.canceled()) {
             finalStatus = Status::Canceled;

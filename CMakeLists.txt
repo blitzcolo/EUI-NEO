@@ -35,7 +35,23 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     TIMEOUT 30
 )
-FetchContent_MakeAvailable(glad)
+FetchContent_GetProperties(glad)
+if(NOT glad_POPULATED)
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+    FetchContent_Populate(glad)
+    if(POLICY CMP0169)
+        cmake_policy(POP)
+    endif()
+    add_library(glad "${glad_SOURCE_DIR}/src/glad.c")
+    target_include_directories(glad PUBLIC "${glad_SOURCE_DIR}/include")
+    if(NOT WIN32)
+        target_link_libraries(glad PUBLIC ${CMAKE_DL_LIBS})
+    endif()
+    set_target_properties(glad PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
 
 FetchContent_Declare(
     tray
@@ -70,6 +86,11 @@ set(CORE_SOURCES
     core/tray_bridge.c
     core/text.cpp
 )
+
+set(APP_ASSET_FILES)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+    file(GLOB APP_ASSET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/*")
+endif()
 
 set(APP_ICON_RESOURCE)
 if(WIN32)
@@ -122,11 +143,12 @@ function(configure_opengl_app target_name)
         target_compile_definitions(${target_name} PRIVATE EUI_HAS_CURL=1)
     endif()
 
-    add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:${target_name}>/assets
-    )
+    if(APP_ASSET_FILES)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${target_name}>/assets
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${APP_ASSET_FILES} $<TARGET_FILE_DIR:${target_name}>/assets
+        )
+    endif()
 endfunction()
 
 file(GLOB APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp")
