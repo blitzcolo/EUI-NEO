@@ -1,6 +1,7 @@
 #include "app/dsl_app.h"
 
 #include "components/components.h"
+#include "core/image.h"
 #include "core/network.h"
 #include "core/platform.h"
 
@@ -387,6 +388,8 @@ void propertyCard(core::dsl::Ui& ui, const std::string& id, const std::string& t
 void bingImageCard(core::dsl::Ui& ui, const std::string& id, const std::string& title, int index, const std::string& market,
                    float width, float height = 122.0f, float imageHeight = 72.0f) {
     const float labelY = std::max(14.0f, height - 30.0f);
+    const std::string imageSource = "bing://daily?idx=" + std::to_string(std::max(0, index)) + "&mkt=" + market;
+    const bool imageReady = core::ImagePrimitive::isSourceReady(imageSource);
     ui.stack(id)
         .size(width, height)
         .content([&] {
@@ -397,11 +400,23 @@ void bingImageCard(core::dsl::Ui& ui, const std::string& id, const std::string& 
                 .border(1.0f, borderColor())
                 .build();
 
+            const float imageWidth = std::max(0.0f, width - 28.0f);
+            if (!imageReady) {
+                const float loaderSize = std::min(54.0f, std::max(24.0f, imageHeight * 0.42f));
+                ui.image(id + ".loader")
+                    .x(14.0f + (imageWidth - loaderSize) * 0.5f)
+                    .y(14.0f + (imageHeight - loaderSize) * 0.5f)
+                    .size(loaderSize, loaderSize)
+                    .source("mona-loading-default.gif")
+                    .contain()
+                    .build();
+            }
+
             ui.image(id + ".image")
                 .x(14.0f)
                 .y(14.0f)
-                .size(std::max(0.0f, width - 28.0f), imageHeight)
-                .bingDaily(index, market)
+                .size(imageWidth, imageHeight)
+                .source(imageSource)
                 .radius(14.0f)
                 .transition(pageTransition())
                 .build();

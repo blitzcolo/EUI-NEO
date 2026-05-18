@@ -701,6 +701,7 @@ private:
                instance.radius.isActive() ||
                instance.opacity.isActive() ||
                instance.transform.isActive() ||
+               instance.primitive->isAnimating() ||
                instance.primitive->hasPendingLoad();
     }
 

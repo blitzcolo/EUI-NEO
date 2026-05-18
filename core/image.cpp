@@ -62,6 +62,11 @@ bool hasSvgExtension(const std::string& path) {
     return ext == ".svg";
 }
 
+bool hasGifExtension(const std::string& path) {
+    const std::string ext = lowerCopy(std::filesystem::path(path).extension().string());
+    return ext == ".gif";
+}
+
 bool looksLikeSvgFile(const std::string& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input.good()) {
@@ -80,6 +85,20 @@ bool looksLikeSvgFile(const std::string& path) {
     return head.rfind("<svg", 0) == 0 || head.find("<svg") != std::string::npos;
 }
 
+bool looksLikeGifFile(const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input.good()) {
+        return false;
+    }
+
+    char buffer[6] = {};
+    input.read(buffer, sizeof(buffer));
+    if (input.gcount() != static_cast<std::streamsize>(sizeof(buffer))) {
+        return false;
+    }
+    return std::string(buffer, sizeof(buffer)) == "GIF87a" || std::string(buffer, sizeof(buffer)) == "GIF89a";
+}
+
 std::string urlExtension(const std::string& url) {
     const size_t query = url.find_first_of("?#");
     const std::string pathPart = url.substr(0, query == std::string::npos ? std::string::npos : query);
@@ -89,7 +108,7 @@ std::string urlExtension(const std::string& url) {
     if (dot != std::string::npos && (slash == std::string::npos || dot > slash)) {
         ext = lowerCopy(pathPart.substr(dot));
     }
-    if (ext == ".svg" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp") {
+    if (ext == ".svg" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp" || ext == ".gif") {
         return ext;
     }
     return ".cache";
@@ -425,6 +444,28 @@ bool rasterizeSvgFile(const std::string& path, int targetWidth, int targetHeight
     return !pixels.empty();
 }
 
+bool readBinaryFile(const std::string& path, std::vector<unsigned char>& bytes) {
+    bytes.clear();
+    std::ifstream file(path, std::ios::binary);
+    if (!file.good()) {
+        return false;
+    }
+
+    file.seekg(0, std::ios::end);
+    const std::streamoff size = file.tellg();
+    if (size <= 0) {
+        return false;
+    }
+    file.seekg(0, std::ios::beg);
+    bytes.resize(static_cast<size_t>(size));
+    file.read(reinterpret_cast<char*>(bytes.data()), size);
+    if (!file.good() && !file.eof()) {
+        bytes.clear();
+        return false;
+    }
+    return true;
+}
+
 GLuint createTexture(const unsigned char* pixels, int width, int height) {
     if (pixels == nullptr || width <= 0 || height <= 0) {
         return 0;
@@ -441,6 +482,17 @@ GLuint createTexture(const unsigned char* pixels, int width, int height) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
     return texture;
+}
+
+void updateTexturePixels(GLuint texture, const unsigned char* pixels, int width, int height) {
+    if (texture == 0 || pixels == nullptr || width <= 0 || height <= 0) {
+        return;
+    }
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 } // namespace
@@ -475,6 +527,7 @@ bool ImagePrimitive::initialize() {
 }
 
 void ImagePrimitive::destroy() {
+    releaseOwnedTexture();
     if (shaderProgram_ != 0) {
         releaseSharedResources();
     }
@@ -522,6 +575,22 @@ void ImagePrimitive::setFit(ImageFit fit) {
 
 bool ImagePrimitive::updateTexture() {
     bool pending = false;
+    const std::string resolvedPath = resolveImagePath(source_, &pending);
+    pendingLoad_ = pending;
+    if (!resolvedPath.empty() && (hasGifExtension(resolvedPath) || looksLikeGifFile(resolvedPath))) {
+        return updateGifTexture(resolvedPath);
+    }
+
+    if (!loadedGifPath_.empty()) {
+        releaseOwnedTexture();
+        loadedGifPath_.clear();
+        gifPixels_.clear();
+        gifDelays_.clear();
+        gifFrameCount_ = 0;
+        gifFrameIndex_ = 0;
+        gifNextFrameTime_ = 0.0;
+    }
+
     int nextWidth = 0;
     int nextHeight = 0;
     const GLuint nextTexture = loadTexture(source_, flipVertically_, &pending, &nextWidth, &nextHeight);
@@ -529,6 +598,7 @@ bool ImagePrimitive::updateTexture() {
 
     if (nextTexture == 0) {
         if (source_.empty()) {
+            releaseOwnedTexture();
             texture_ = 0;
             textureWidth_ = 0;
             textureHeight_ = 0;
@@ -538,7 +608,9 @@ bool ImagePrimitive::updateTexture() {
     }
 
     const bool changed = texture_ != nextTexture || loadedSource_ != source_ || loadedFlipVertically_ != flipVertically_;
+    releaseOwnedTexture();
     texture_ = nextTexture;
+    ownsTexture_ = false;
     textureWidth_ = nextWidth;
     textureHeight_ = nextHeight;
     loadedSource_ = source_;
@@ -549,6 +621,10 @@ bool ImagePrimitive::updateTexture() {
 
 bool ImagePrimitive::hasPendingLoad() const {
     return pendingLoad_;
+}
+
+bool ImagePrimitive::isAnimating() const {
+    return gifFrameCount_ > 1;
 }
 
 void ImagePrimitive::render(int windowWidth, int windowHeight) {
@@ -583,6 +659,11 @@ void ImagePrimitive::render(int windowWidth, int windowHeight) {
     if (!blendEnabled) {
         glDisable(GL_BLEND);
     }
+}
+
+bool ImagePrimitive::isSourceReady(const std::string& source) {
+    bool pending = false;
+    return !resolveImagePath(source, &pending).empty() && !pending;
 }
 
 bool ImagePrimitive::consumeRemoteImageReady() {
@@ -739,6 +820,101 @@ GLuint ImagePrimitive::compileShader(GLenum type, const char* source) {
         return 0;
     }
     return shader;
+}
+
+bool ImagePrimitive::updateGifTexture(const std::string& resolvedPath) {
+    if (resolvedPath.empty()) {
+        return false;
+    }
+
+    if (loadedGifPath_ != resolvedPath || loadedGifFlipVertically_ != flipVertically_) {
+        std::vector<unsigned char> bytes;
+        if (!readBinaryFile(resolvedPath, bytes)) {
+            return false;
+        }
+
+        stbi_set_flip_vertically_on_load(flipVertically_ ? 1 : 0);
+        int* delays = nullptr;
+        int width = 0;
+        int height = 0;
+        int frames = 0;
+        int channels = 0;
+        unsigned char* pixels = stbi_load_gif_from_memory(bytes.data(), static_cast<int>(bytes.size()),
+                                                          &delays, &width, &height, &frames, &channels, STBI_rgb_alpha);
+        if (pixels == nullptr || width <= 0 || height <= 0 || frames <= 0) {
+            if (pixels != nullptr) {
+                stbi_image_free(pixels);
+            }
+            if (delays != nullptr) {
+                stbi_image_free(delays);
+            }
+            return false;
+        }
+
+        const size_t frameBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4u;
+        gifPixels_.assign(pixels, pixels + frameBytes * static_cast<size_t>(frames));
+        gifDelays_.assign(static_cast<size_t>(frames), 100);
+        for (int i = 0; i < frames; ++i) {
+            const int delay = delays != nullptr ? delays[i] : 100;
+            gifDelays_[static_cast<size_t>(i)] = std::max(10, delay);
+        }
+        stbi_image_free(pixels);
+        if (delays != nullptr) {
+            stbi_image_free(delays);
+        }
+
+        releaseOwnedTexture();
+        texture_ = createTexture(gifPixels_.data(), width, height);
+        if (texture_ == 0) {
+            gifPixels_.clear();
+            gifDelays_.clear();
+            gifFrameCount_ = 0;
+            return false;
+        }
+
+        ownsTexture_ = true;
+        textureWidth_ = width;
+        textureHeight_ = height;
+        loadedSource_ = source_;
+        loadedFlipVertically_ = flipVertically_;
+        loadedGifPath_ = resolvedPath;
+        loadedGifFlipVertically_ = flipVertically_;
+        gifFrameCount_ = frames;
+        gifFrameIndex_ = 0;
+        gifNextFrameTime_ = glfwGetTime() + static_cast<double>(gifDelays_.front()) / 1000.0;
+        pendingLoad_ = false;
+        return true;
+    }
+
+    if (gifFrameCount_ <= 1 || texture_ == 0 || gifPixels_.empty()) {
+        return false;
+    }
+
+    const double now = glfwGetTime();
+    if (now < gifNextFrameTime_) {
+        return false;
+    }
+
+    int guard = 0;
+    do {
+        gifFrameIndex_ = (gifFrameIndex_ + 1) % gifFrameCount_;
+        const int delay = gifDelays_.empty() ? 100 : gifDelays_[static_cast<size_t>(gifFrameIndex_)];
+        gifNextFrameTime_ += static_cast<double>(std::max(10, delay)) / 1000.0;
+        ++guard;
+    } while (now >= gifNextFrameTime_ && guard < gifFrameCount_);
+
+    const size_t frameBytes = static_cast<size_t>(textureWidth_) * static_cast<size_t>(textureHeight_) * 4u;
+    const unsigned char* frame = gifPixels_.data() + frameBytes * static_cast<size_t>(gifFrameIndex_);
+    updateTexturePixels(texture_, frame, textureWidth_, textureHeight_);
+    return true;
+}
+
+void ImagePrimitive::releaseOwnedTexture() {
+    if (ownsTexture_ && texture_ != 0) {
+        glDeleteTextures(1, &texture_);
+        texture_ = 0;
+    }
+    ownsTexture_ = false;
 }
 
 GLuint ImagePrimitive::loadTexture(const std::string& source, bool flipVertically, bool* pending, int* outWidth, int* outHeight) {

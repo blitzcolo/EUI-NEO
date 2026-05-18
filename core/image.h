@@ -3,6 +3,7 @@
 #include "core/primitive.h"
 
 #include <string>
+#include <vector>
 
 namespace core {
 
@@ -30,8 +31,10 @@ public:
 
     bool updateTexture();
     bool hasPendingLoad() const;
+    bool isAnimating() const;
     void render(int windowWidth, int windowHeight);
 
+    static bool isSourceReady(const std::string& source);
     static bool consumeRemoteImageReady();
     static void releaseCachedTextures();
 
@@ -44,6 +47,8 @@ private:
     static GLuint compileShader(GLenum type, const char* source);
     static GLuint loadTexture(const std::string& source, bool flipVertically, bool* pending, int* width, int* height);
 
+    bool updateGifTexture(const std::string& resolvedPath);
+    void releaseOwnedTexture();
     Vec2 transformPoint(float x, float y) const;
     void rebuildVertices(float* vertices) const;
 
@@ -59,8 +64,17 @@ private:
     Transform transform_;
     ImageFit fit_ = ImageFit::Cover;
     GLuint texture_ = 0;
+    bool ownsTexture_ = false;
     int textureWidth_ = 0;
     int textureHeight_ = 0;
+
+    std::string loadedGifPath_;
+    bool loadedGifFlipVertically_ = false;
+    std::vector<unsigned char> gifPixels_;
+    std::vector<int> gifDelays_;
+    int gifFrameCount_ = 0;
+    int gifFrameIndex_ = 0;
+    double gifNextFrameTime_ = 0.0;
 
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
