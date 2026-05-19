@@ -19,6 +19,7 @@
 #include "components/scroll.h"
 #include "components/segmented.h"
 #include "components/slider.h"
+#include "components/stepper.h"
 #include "components/switch.h"
 #include "components/tabs.h"
 #include "components/theme.h"

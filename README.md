@@ -80,7 +80,7 @@ docs/         Implementation notes and API documentation
 `components/components.h` exports the current component layer:
 
 - Basic wrappers: `panel`, `text` / `label`, `image`, `theme`
-- Controls: `button`, `checkbox`, `radio`, `toggleSwitch`, `progress`, `slider`, `input`, `segmented`, `tabs`, `scroll`
+- Controls: `button`, `checkbox`, `radio`, `toggleSwitch`, `progress`, `slider`, `input`, `segmented`, `stepper`, `tabs`, `scroll`
 - Popups and feedback: `dialog`, `toast`, `contextMenu`, `dropdown`
 - Pickers: `datepicker`, `timepicker`, `colorpicker`
 - Data display: `dataTable` / `datatable`

@@ -80,7 +80,7 @@ docs/         项目实现文档
 `components/components.h` 聚合导出当前组件层：
 
 - 基础包装：`panel`、`text` / `label`、`image`、`theme`
-- 控件：`button`、`checkbox`、`radio`、`toggleSwitch`、`progress`、`slider`、`input`、`segmented`、`tabs`、`scroll`
+- 控件：`button`、`checkbox`、`radio`、`toggleSwitch`、`progress`、`slider`、`input`、`segmented`、`stepper`、`tabs`、`scroll`
 - 弹层和反馈：`dialog`、`toast`、`contextMenu`、`dropdown`
 - 选择器：`datepicker`、`timepicker`、`colorpicker`
 - 数据展示：`dataTable` / `datatable`

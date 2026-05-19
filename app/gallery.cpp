@@ -35,6 +35,9 @@ std::string sampleInput = "EUI";
 float sampleSlider = 0.44f;
 int sampleSegment = 1;
 int sampleTab = 0;
+int sampleStepperDec = 42;
+int sampleStepperHex = 0x2A;
+int sampleStepperBin = 0x15;
 int sampleDropdown = 1;
 bool sampleDropdownOpen = false;
 int sampleYear = 2026;
@@ -512,6 +515,9 @@ void composeControlsPage(core::dsl::Ui& ui, float width, float height) {
     const float chartWidth = std::max(150.0f, std::min(206.0f, (fieldWidth - chartGap * 2.0f) / 3.0f));
     const float chartHeight = 236.0f;
     const float chartRowWidth = chartWidth * 3.0f + chartGap * 2.0f;
+    const float stepperGap = 18.0f;
+    const float stepperWidth = std::max(132.0f, std::min(214.0f, (fieldWidth - stepperGap * 2.0f) / 3.0f));
+    const float stepperRowWidth = stepperWidth * 3.0f + stepperGap * 2.0f;
 
     ui.text("controls.components.title")
         .size(width, 30.0f)
@@ -636,33 +642,142 @@ void composeControlsPage(core::dsl::Ui& ui, float width, float height) {
         })
         .build();
 
-    ui.row("controls.choice")
-        .size(fieldWidth, 46.0f)
+    ui.column("controls.choice")
+        .size(fieldWidth, 148.0f)
         .gap(18.0f)
-        .alignItems(core::Align::CENTER)
         .content([&] {
-            components::segmented(ui, "control.segmented")
-                .theme(themeColors())
-                .size(std::max(180.0f, (fieldWidth - 18.0f) * 0.5f), 38.0f)
-                .items({"Small", "Medium", "Large"})
-                .selected(sampleSegment)
-                .transition(pageTransition())
-                .onChange([](int index) {
-                    sampleSegment = index;
+            ui.row("controls.choice.row")
+                .size(fieldWidth, 46.0f)
+                .gap(18.0f)
+                .alignItems(core::Align::CENTER)
+                .content([&] {
+                    components::segmented(ui, "control.segmented")
+                        .theme(themeColors())
+                        .size(std::max(180.0f, (fieldWidth - 18.0f) * 0.5f), 38.0f)
+                        .items({"Small", "Medium", "Large"})
+                        .selected(sampleSegment)
+                        .transition(pageTransition())
+                        .onChange([](int index) {
+                            sampleSegment = index;
+                        })
+                        .build();
+
+                    components::tabs(ui, "control.tabs")
+                        .theme(themeColors())
+                        .size(std::max(180.0f, (fieldWidth - 18.0f) * 0.5f), 42.0f)
+                        .items({"Overview", "Details", "Logs"})
+                        .selected(sampleTab)
+                        .transition(pageTransition())
+                        .onChange([](int index) {
+                            sampleTab = index;
+                        })
+                        .build();
                 })
                 .build();
 
-            components::tabs(ui, "control.tabs")
-                .theme(themeColors())
-                .size(std::max(180.0f, (fieldWidth - 18.0f) * 0.5f), 42.0f)
-                .items({"Overview", "Details", "Logs"})
-                .selected(sampleTab)
-                .transition(pageTransition())
-                .onChange([](int index) {
-                    sampleTab = index;
+            ui.row("controls.stepper.row")
+                .size(stepperRowWidth, 84.0f)
+                .gap(stepperGap)
+                .content([&] {
+                    ui.column("controls.stepper.dec")
+                        .size(stepperWidth, 84.0f)
+                        .gap(8.0f)
+                        .justifyContent(core::Align::CENTER)
+                        .content([&] {
+                            ui.text("controls.stepper.dec.label")
+                                .size(stepperWidth, 18.0f)
+                                .text("DEC 4-digit")
+                                .fontSize(13.0f)
+                                .lineHeight(16.0f)
+                                .color(textMuted())
+                                .horizontalAlign(core::HorizontalAlign::Center)
+                                .verticalAlign(core::VerticalAlign::Center)
+                                .build();
+
+                            components::stepper(ui, "control.stepper.dec")
+                                .theme(themeColors())
+                                .size(stepperWidth, 40.0f)
+                                .value(sampleStepperDec)
+                                .step(5)
+                                .minimum(0)
+                                .maximum(9999)
+                                .base(10)
+                                .digits(4)
+                                .showBasePrefix(false)
+                                .transition(pageTransition())
+                                .onChange([](long long value) {
+                                    sampleStepperDec = static_cast<int>(value);
+                                    sampleFeedback = "Decimal stepper changed";
+                                })
+                                .build();
+                        })
+                        .build();
+
+                    ui.column("controls.stepper.hex")
+                        .size(stepperWidth, 84.0f)
+                        .gap(8.0f)
+                        .justifyContent(core::Align::CENTER)
+                        .content([&] {
+                            ui.text("controls.stepper.hex.label")
+                                .size(stepperWidth, 18.0f)
+                                .text("HEX 16-bit")
+                                .fontSize(13.0f)
+                                .lineHeight(16.0f)
+                                .color(textMuted())
+                                .horizontalAlign(core::HorizontalAlign::Center)
+                                .verticalAlign(core::VerticalAlign::Center)
+                                .build();
+
+                            components::stepper(ui, "control.stepper.hex")
+                                .theme(themeColors())
+                                .size(stepperWidth, 40.0f)
+                                .value(sampleStepperHex)
+                                .step(1)
+                                .base(16)
+                                .bitWidth(16)
+                                .transition(pageTransition())
+                                .onChange([](long long value) {
+                                    sampleStepperHex = static_cast<int>(value);
+                                    sampleFeedback = "Hex stepper changed";
+                                })
+                                .build();
+                        })
+                        .build();
+
+                    ui.column("controls.stepper.bin")
+                        .size(stepperWidth, 84.0f)
+                        .gap(8.0f)
+                        .justifyContent(core::Align::CENTER)
+                        .content([&] {
+                            ui.text("controls.stepper.bin.label")
+                                .size(stepperWidth, 18.0f)
+                                .text("BIN 8-bit")
+                                .fontSize(13.0f)
+                                .lineHeight(16.0f)
+                                .color(textMuted())
+                                .horizontalAlign(core::HorizontalAlign::Center)
+                                .verticalAlign(core::VerticalAlign::Center)
+                                .build();
+
+                            components::stepper(ui, "control.stepper.bin")
+                                .theme(themeColors())
+                                .size(stepperWidth, 40.0f)
+                                .value(sampleStepperBin)
+                                .step(1)
+                                .base(2)
+                                .bitWidth(8)
+                                .transition(pageTransition())
+                                .onChange([](long long value) {
+                                    sampleStepperBin = static_cast<int>(value);
+                                    sampleFeedback = "Binary stepper changed";
+                                })
+                                .build();
+                        })
+                        .build();
                 })
                 .build();
-        });
+        })
+        .build();
 
     ui.text("controls.feedback.title")
         .size(width, 30.0f)
@@ -1593,31 +1708,24 @@ void composePageBody(core::dsl::Ui& ui, float width, float height) {
     }
 }
 
-float pageBodyContentHeight(float viewportHeight) {
-    const float bodyGap = optionDense ? 18.0f : 26.0f;
-    if (selectedPage == 0) {
-        const float controlsContentHeight =
-            30.0f + 68.0f + 44.0f + 92.0f + 14.0f + 32.0f + 46.0f +
-            30.0f + 82.0f + 22.0f + 30.0f + 56.0f + 200.0f + 30.0f + 236.0f +
-            30.0f + 144.0f + 144.0f + bodyGap * 17.0f + 56.0f;
-        return std::max(viewportHeight, controlsContentHeight);
-    }
-    if (selectedPage == 1) {
-        const float styleContentHeight =
-            380.0f + 30.0f + 88.0f + 88.0f + 30.0f + 88.0f +
-            bodyGap * 5.0f + 40.0f;
-        return std::max(viewportHeight, styleContentHeight);
-    }
-    if (selectedPage == 2) {
+float measurePageBodyContentHeight(float width, float viewportHeight, float gap) {
+    core::dsl::Ui measureUi;
+    measureUi.begin("measure.page");
+    measureUi.column("measure.body")
+        .width(width)
+        .height(core::SizeValue::wrapContent())
+        .gap(gap)
+        .content([&] {
+            composePageBody(measureUi, width, viewportHeight);
+        })
+        .build();
+    measureUi.end();
+    measureUi.layout(width, std::max(viewportHeight, 10000.0f));
+    const core::dsl::Element* body = measureUi.find("measure.body");
+    if (body == nullptr) {
         return viewportHeight;
     }
-    if (selectedPage == 3) {
-        return std::max(viewportHeight, 430.0f);
-    }
-    if (selectedPage == 4) {
-        return std::max(viewportHeight, 440.0f);
-    }
-    return viewportHeight;
+    return std::max(viewportHeight, body->frame.height);
 }
 
 void composeContent(core::dsl::Ui& ui, float width, float height) {
@@ -1627,15 +1735,21 @@ void composeContent(core::dsl::Ui& ui, float width, float height) {
     const float innerHeight = std::max(0.0f, shellHeight - 64.0f);
     const float headerGap = optionDense ? 18.0f : 26.0f;
     const float bodyHeight = std::max(0.0f, innerHeight - 46.0f - 30.0f - headerGap * 2.0f);
-    const float contentHeight = pageBodyContentHeight(bodyHeight);
+    const float scrollWidthCandidate = 8.0f;
+    const float scrollGapCandidate = 16.0f;
+    const float fullBodyContentWidth = innerWidth;
+    const float initialContentHeight = measurePageBodyContentHeight(fullBodyContentWidth, bodyHeight, headerGap);
+    const bool scrollable = initialContentHeight > bodyHeight;
+    const float scrollWidth = scrollable ? scrollWidthCandidate : 0.0f;
+    const float scrollGap = scrollable ? scrollGapCandidate : 0.0f;
+    const float bodyContentWidth = std::max(0.0f, innerWidth - scrollWidth - scrollGap);
+    const float contentHeight = scrollable
+        ? measurePageBodyContentHeight(bodyContentWidth, bodyHeight, headerGap)
+        : initialContentHeight;
     const float maxScroll = std::max(0.0f, contentHeight - bodyHeight);
-    const bool scrollable = maxScroll > 0.0f;
     const int page = std::clamp(selectedPage, 0, 5);
     pageScroll[page] = std::clamp(pageScroll[page], 0.0f, maxScroll);
     const float scrollOffset = pageScroll[page];
-    const float scrollWidth = scrollable ? 8.0f : 0.0f;
-    const float scrollGap = scrollable ? 16.0f : 0.0f;
-    const float bodyContentWidth = std::max(0.0f, innerWidth - scrollWidth - scrollGap);
 
     ui.stack("content.area")
         .size(width, height)
