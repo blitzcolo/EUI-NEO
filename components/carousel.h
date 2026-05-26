@@ -87,34 +87,52 @@ public:
             }
             constexpr float scrollSensitivity = 0.18f;
             const float delta = std::clamp(static_cast<float>(event.y), -1.0f, 1.0f);
+            const float next = clampIndex(center - delta * scrollSensitivity, count);
+            if (state.hasEmittedIndex && !shouldEmitIndex(state.emittedIndex, next)) {
+                return;
+            }
             state.directMotion = true;
-            onChange(clampIndex(center - delta * scrollSensitivity, count));
+            state.emittedIndex = next;
+            state.hasEmittedIndex = true;
+            onChange(next);
         };
         const auto beginRootDrag = [&state, center, safeWidth](const core::PointerEvent&, const core::Rect& bounds) {
             state.dragStartIndex = center;
             state.pointerScale = bounds.width > 0.0f ? bounds.width / safeWidth : 1.0f;
             state.directMotion = true;
+            state.emittedIndex = center;
+            state.hasEmittedIndex = true;
         };
         const auto beginCardDrag = [&state, center, cardWidth](const core::PointerEvent&, const core::Rect& bounds) {
             state.dragStartIndex = center;
             state.pointerScale = bounds.width > 0.0f ? bounds.width / cardWidth : 1.0f;
             state.directMotion = true;
+            state.emittedIndex = center;
+            state.hasEmittedIndex = true;
         };
         const auto dragToIndex = [&state, count, dragStep, onChange](const core::dsl::DragEvent& event) {
             if (!onChange || count <= 1 || dragStep <= 0.0f) {
                 return;
             }
             const float logicalTotalX = static_cast<float>(event.totalX) / std::max(0.001f, state.pointerScale);
-            const float next = state.dragStartIndex - logicalTotalX / dragStep;
+            const float next = clampIndex(state.dragStartIndex - logicalTotalX / dragStep, count);
+            if (state.hasEmittedIndex && !shouldEmitIndex(state.emittedIndex, next)) {
+                return;
+            }
             state.directMotion = true;
-            onChange(clampIndex(next, count));
+            state.emittedIndex = next;
+            state.hasEmittedIndex = true;
+            onChange(next);
         };
         const auto jumpToIndex = [&state, count, onChange](float next) {
             if (!onChange || count <= 1) {
                 return;
             }
             state.directMotion = false;
-            onChange(clampIndex(next, count));
+            const float clamped = clampIndex(next, count);
+            state.emittedIndex = clamped;
+            state.hasEmittedIndex = true;
+            onChange(clamped);
         };
 
         ui_.stack(id_)
@@ -129,8 +147,9 @@ public:
                     return;
                 }
 
-                for (int offset = -2; offset <= 2; ++offset) {
-                    const int itemIndex = static_cast<int>(std::round(center)) + offset;
+                const int anchorIndex = static_cast<int>(std::floor(center));
+                for (int offset = -1; offset <= 2; ++offset) {
+                    const int itemIndex = anchorIndex + offset;
                     if (itemIndex < 0 || itemIndex >= count) {
                         continue;
                     }
@@ -143,6 +162,11 @@ public:
     }
 
 private:
+    static constexpr float kVisibleDistance = 1.45f;
+    static constexpr float kDetailedDistance = 1.05f;
+    static constexpr float kInteractiveDistance = 1.30f;
+    static constexpr float kIndexEmitThreshold = 0.01f;
+
     static float clampIndex(float value, int count) {
         if (count <= 0) {
             return 0.0f;
@@ -155,10 +179,16 @@ private:
         return t * t * (3.0f - 2.0f * t);
     }
 
+    static bool shouldEmitIndex(float previous, float next) {
+        return std::fabs(previous - next) >= kIndexEmitThreshold;
+    }
+
     struct CarouselState {
         float dragStartIndex = 0.0f;
+        float emittedIndex = 0.0f;
         float pointerScale = 1.0f;
         bool directMotion = false;
+        bool hasEmittedIndex = false;
     };
 
     static CarouselState& stateFor(const std::string& id) {
@@ -200,6 +230,10 @@ private:
         const CarouselItem& item = items_[static_cast<std::size_t>(itemIndex)];
         const float distance = static_cast<float>(itemIndex) - center;
         const float absDistance = std::fabs(distance);
+        if (absDistance > kVisibleDistance) {
+            return;
+        }
+
         const float focus = 1.0f - std::clamp(absDistance, 0.0f, 1.0f);
         const float side = smoothAmount(std::min(absDistance, 1.0f));
         const float scale = 1.0f - side * 0.12f - std::max(0.0f, absDistance - 1.0f) * 0.06f;
@@ -209,28 +243,34 @@ private:
         const float textShift = -distance * parallax_ * 0.08f;
         const int z = 100 - static_cast<int>(std::round(absDistance * 10.0f));
         const bool active = absDistance < 0.55f;
-        const bool drawShadow = active && style_.shadow.enabled;
+        const bool detailed = absDistance <= kDetailedDistance;
+        const bool interactive = absDistance <= kInteractiveDistance;
+        const bool drawShadow = active && style_.shadow.enabled && focus > 0.92f;
         const std::string cardId = id_ + ".card." + std::to_string(itemIndex);
         const bool imageReady = item.source.empty() || core::ImagePrimitive::isSourceReady(item.source);
+        const bool drawSurface = drawShadow || detailed;
 
         ui_.stack(cardId)
             .x(x)
             .y(y)
             .size(cardWidth, cardHeight)
             .zIndex(z)
+            .clip()
             .scale(scale)
             .transformOrigin(0.5f, 0.5f)
             .opacity(opacity)
             .transition(cardTransition)
             .animate(core::AnimProperty::Frame | core::AnimProperty::Transform | core::AnimProperty::Opacity)
             .content([&] {
-                ui_.rect(cardId + ".surface")
-                    .size(cardWidth, cardHeight)
-                    .color(style_.background)
-                    .radius(style_.radius)
-                    .border(1.0f, style_.border)
-                    .shadow(drawShadow ? style_.shadow : core::Shadow{})
-                    .build();
+                if (drawSurface) {
+                    ui_.rect(cardId + ".surface")
+                        .size(cardWidth, cardHeight)
+                        .color(style_.background)
+                        .radius(style_.radius)
+                        .border(1.0f, style_.border)
+                        .shadow(drawShadow ? style_.shadow : core::Shadow{})
+                        .build();
+                }
 
                 ui_.stack(cardId + ".image.layer")
                     .size(cardWidth, cardHeight)
@@ -261,46 +301,50 @@ private:
                             .size(cardWidth, cardHeight)
                             .gradient(style_.overlayTop, style_.overlayBottom, core::GradientDirection::Vertical)
                             .radius(style_.radius)
-                            .opacity(active ? 1.0f : 0.78f)
+                            .opacity(active ? 1.0f : (detailed ? 0.78f : 0.68f))
                             .build();
                     })
                     .build();
 
-                ui_.text(cardId + ".title")
-                    .x(22.0f + textShift)
-                    .y(std::max(0.0f, cardHeight - 64.0f))
-                    .size(std::max(0.0f, cardWidth - 44.0f), 26.0f)
-                    .text(item.title)
-                    .fontSize(active ? 22.0f : 19.0f)
-                    .lineHeight(24.0f)
-                    .color(style_.text)
-                    .build();
-
-                if (!item.subtitle.empty()) {
-                    ui_.text(cardId + ".subtitle")
+                if (detailed) {
+                    ui_.text(cardId + ".title")
                         .x(22.0f + textShift)
-                        .y(std::max(0.0f, cardHeight - 35.0f))
-                        .size(std::max(0.0f, cardWidth - 44.0f), 18.0f)
-                        .text(item.subtitle)
-                        .fontSize(14.0f)
-                        .lineHeight(18.0f)
-                        .color(style_.mutedText)
+                        .y(std::max(0.0f, cardHeight - 64.0f))
+                        .size(std::max(0.0f, cardWidth - 44.0f), 26.0f)
+                        .text(item.title)
+                        .fontSize(active ? 22.0f : 19.0f)
+                        .lineHeight(24.0f)
+                        .color(style_.text)
                         .build();
+
+                    if (!item.subtitle.empty()) {
+                        ui_.text(cardId + ".subtitle")
+                            .x(22.0f + textShift)
+                            .y(std::max(0.0f, cardHeight - 35.0f))
+                            .size(std::max(0.0f, cardWidth - 44.0f), 18.0f)
+                            .text(item.subtitle)
+                            .fontSize(14.0f)
+                            .lineHeight(18.0f)
+                            .color(style_.mutedText)
+                            .build();
+                    }
                 }
 
-                ui_.rect(cardId + ".hit")
-                    .size(cardWidth, cardHeight)
-                    .color(theme::color(0.0f, 0.0f, 0.0f, 0.0f))
-                    .radius(style_.radius)
-                    .onClick([onChange, itemIndex] {
-                        if (onChange) {
-                            onChange(static_cast<float>(itemIndex));
-                        }
-                    })
-                    .onScroll(onScroll)
-                    .onPress(onPress)
-                    .onDrag(onDrag)
-                    .build();
+                if (interactive) {
+                    ui_.rect(cardId + ".hit")
+                        .size(cardWidth, cardHeight)
+                        .color(theme::color(0.0f, 0.0f, 0.0f, 0.0f))
+                        .radius(style_.radius)
+                        .onClick([onChange, itemIndex] {
+                            if (onChange) {
+                                onChange(static_cast<float>(itemIndex));
+                            }
+                        })
+                        .onScroll(onScroll)
+                        .onPress(onPress)
+                        .onDrag(onDrag)
+                        .build();
+                }
             })
             .build();
     }
