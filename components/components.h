@@ -1,6 +1,7 @@
 #pragma once
 
 #include "components/button.h"
+#include "components/carousel.h"
 #include "components/checkbox.h"
 #include "components/colorpicker.h"
 #include "components/contextmenu.h"

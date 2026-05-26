@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <functional>
+#include <vector>
 #include <string>
 
 namespace app {
@@ -56,6 +57,7 @@ float sampleContextMenuX = 0.0f;
 float sampleContextMenuY = 0.0f;
 std::string sampleFeedback = "Ready";
 float pageScroll[6] = {};
+float bingCarouselPosition = 0.0f;
 
 constexpr float kSidebarWidth = 272.0f;
 constexpr float kNavTop = 128.0f;
@@ -1487,25 +1489,40 @@ void composeSettingsPage(core::dsl::Ui& ui, float width, float height) {
 
 void composeBingPage(core::dsl::Ui& ui, float width, float height) {
     const float contentWidth = std::max(260.0f, std::min(width, 860.0f));
-    const float cardGap = 20.0f;
-    const float cardWidth = std::max(116.0f, std::min(400.0f, (contentWidth - cardGap) * 0.5f));
-    const float rowWidth = cardWidth * 2.0f + cardGap;
-    const float mediaHeight = 252.0f;
-    const float mediaImageHeight = 198.0f;
+    const float mediaHeight = 282.0f;
     const float apiHeight = 138.0f;
+    const std::vector<components::CarouselItem> bingItems = {
+        {"bing://daily?idx=0&mkt=zh-CN", "Bing Today", "zh-CN daily image"},
+        {"bing://daily?idx=1&mkt=zh-CN", "Bing Yesterday", "previous daily image"},
+        {"bing://daily?idx=2&mkt=zh-CN", "Two Days Ago", "archive image"},
+        {"bing://daily?idx=3&mkt=zh-CN", "Earlier", "archive image"}
+    };
+    components::CarouselStyle carouselStyle(themeColors());
+    carouselStyle.background = surface();
+    carouselStyle.border = borderColor(0.72f);
+    carouselStyle.text = core::Color{1.0f, 1.0f, 1.0f, 0.96f};
+    carouselStyle.mutedText = core::Color{1.0f, 1.0f, 1.0f, 0.70f};
+    carouselStyle.activeIndicator = accent();
+    carouselStyle.shadow = components::theme::shadow(themeColors(), 26.0f, 10.0f, 0.30f, 0.16f);
 
     ui.column("bing.body")
         .size(width, height)
         .alignItems(core::Align::CENTER)
         .gap(22.0f)
         .content([&] {
-            ui.row("bing.media")
-                .size(rowWidth, mediaHeight)
-                .gap(cardGap)
-                .content([&] {
-                    bingImageCard(ui, "bing.media.today", "Bing Today", 0, "zh-CN", cardWidth, mediaHeight, mediaImageHeight);
-                    bingImageCard(ui, "bing.media.yesterday", "Bing Yesterday", 1, "zh-CN", cardWidth, mediaHeight, mediaImageHeight);
-                });
+            components::carousel(ui, "bing.media.carousel")
+                .size(contentWidth, mediaHeight)
+                .items(bingItems)
+                .index(bingCarouselPosition)
+                .cardWidthRatio(contentWidth < 520.0f ? 0.84f : 0.64f)
+                .overlap(contentWidth < 520.0f ? 0.22f : 0.44f)
+                .parallax(contentWidth < 520.0f ? 18.0f : 34.0f)
+                .style(carouselStyle)
+                .transition(pageTransition())
+                .onChange([](float next) {
+                    bingCarouselPosition = std::clamp(next, 0.0f, 3.0f);
+                })
+                .build();
 
             ui.stack("bing.api")
                 .size(contentWidth, apiHeight)
