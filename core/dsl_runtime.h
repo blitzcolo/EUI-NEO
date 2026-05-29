@@ -309,6 +309,9 @@ private:
         std::string source;
         bool flipVertically = false;
         ImageFit fit = ImageFit::Cover;
+        bool hasCoverViewport = false;
+        Vec2 coverViewportSize;
+        Vec2 coverViewportOffset;
     };
 
     struct InteractionInstance {
@@ -763,6 +766,7 @@ private:
         const bool frameTargetChanged = updateFrameTarget(element);
         updateInteraction(element, event, dpiScale, hoverTargetId);
         updateTimer(element, deltaSeconds);
+        updateFrameCallback(element, deltaSeconds);
 
         if (element.kind == ElementKind::Row ||
             element.kind == ElementKind::Column ||
@@ -1111,6 +1115,16 @@ private:
         }
     }
 
+    void updateFrameCallback(const Element& element, float deltaSeconds) {
+        if (!element.onFrame) {
+            return;
+        }
+        element.onFrame(std::max(0.0f, deltaSeconds));
+        needsCompose_ = true;
+        needsRender_ = true;
+        animating_ = true;
+    }
+
     void updateLayoutElement(const Element& element, float deltaSeconds) {
         LayoutInstance& instance = layoutInstance(element.id);
         const Rect beforeRect = inflateRect(
@@ -1305,6 +1319,15 @@ private:
         changed = instance.radius.tick(deltaSeconds) || changed;
         changed = instance.opacity.tick(deltaSeconds) || changed;
         changed = instance.transform.tick(deltaSeconds) || changed;
+
+        if (instance.hasCoverViewport != element.imageHasCoverViewport ||
+            !closeEnough(instance.coverViewportSize, element.imageCoverViewportSize) ||
+            !closeEnough(instance.coverViewportOffset, element.imageCoverViewportOffset)) {
+            instance.hasCoverViewport = element.imageHasCoverViewport;
+            instance.coverViewportSize = element.imageCoverViewportSize;
+            instance.coverViewportOffset = element.imageCoverViewportOffset;
+            changed = true;
+        }
 
         const bool sourceChanged = instance.source != element.imageSource ||
                                    instance.flipVertically != element.imageFlipVertically ||
@@ -1858,6 +1881,11 @@ private:
         instance.primitive->setOpacity(instance.opacity.value() * renderTransform.opacity);
         instance.primitive->setTransform(transform);
         instance.primitive->setFit(instance.fit);
+        instance.primitive->setCoverViewport(instance.hasCoverViewport,
+                                             {toPixels(instance.coverViewportSize.x, dpiScale),
+                                              toPixels(instance.coverViewportSize.y, dpiScale)},
+                                             {toPixels(instance.coverViewportOffset.x, dpiScale),
+                                              toPixels(instance.coverViewportOffset.y, dpiScale)});
         instance.primitive->render(windowWidth, windowHeight);
     }
 

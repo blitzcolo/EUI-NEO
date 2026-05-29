@@ -73,38 +73,61 @@ public:
         const int count = static_cast<int>(items_.size());
         const float safeWidth = std::max(1.0f, width_);
         const float safeHeight = std::max(1.0f, height_);
-        const float center = clampIndex(index_, count);
+        CarouselState& state = stateFor(id_);
+        const float inputIndex = clampIndex(index_, count);
+        if (!state.initialized) {
+            state.displayIndex = inputIndex;
+            state.targetIndex = inputIndex;
+            state.boundIndex = inputIndex;
+            state.initialized = true;
+        } else if (shouldEmitIndex(state.boundIndex, inputIndex)) {
+            state.targetIndex = inputIndex;
+            state.boundIndex = inputIndex;
+        }
+        state.displayIndex = clampIndex(state.displayIndex, count);
+        state.targetIndex = clampIndex(state.targetIndex, count);
+        const float center = state.displayIndex;
         const float cardWidth = std::clamp(safeWidth * cardWidthRatio_, std::min(260.0f, safeWidth), safeWidth);
+        const float sideWidthRatio = std::clamp(kSideCardWidthRatio + (0.36f - overlap_) * 0.35f, 0.30f, 0.52f);
+        const float sideCardWidth = std::clamp(cardWidth * sideWidthRatio, std::min(150.0f, cardWidth), cardWidth);
         const float cardHeight = safeHeight;
-        const float sideStep = cardWidth * (1.0f - overlap_);
-        const float cardX = (safeWidth - cardWidth) * 0.5f;
+        const float sideGap = std::clamp(parallax_, 0.0f, cardWidth * 0.18f);
+        const float sideStep = (cardWidth + sideCardWidth) * 0.5f + sideGap;
+        float activeCenterX = safeWidth * 0.5f;
+        if (count > 1) {
+            const float stageLeft = std::max(0.0f, (safeWidth - cardWidth - sideCardWidth - sideGap) * 0.5f);
+            const float firstCenterX = stageLeft + cardWidth * 0.5f;
+            const float lastCenterX = safeWidth - stageLeft - cardWidth * 0.5f;
+            const float lastBlend = smoothAmount(1.0f - std::clamp(static_cast<float>(count - 1) - center, 0.0f, 1.0f));
+            activeCenterX = firstCenterX + (lastCenterX - firstCenterX) * lastBlend;
+        }
         const float dragStep = std::max(80.0f, sideStep);
         const std::function<void(float)> onChange = onChange_;
-        CarouselState& state = stateFor(id_);
         const core::Transition cardTransition = state.directMotion ? core::Transition::none() : transition_;
         const auto emitIndex = [&state, count, onChange](float next, bool directMotion) {
-            if (!onChange || count <= 1) {
+            if (count <= 1) {
                 return;
             }
             const float clamped = clampIndex(next, count);
-            if (state.hasEmittedIndex && !shouldEmitIndex(state.emittedIndex, clamped)) {
+            state.targetIndex = clamped;
+            state.directMotion = directMotion;
+            if (!onChange || (state.hasEmittedIndex && !shouldEmitIndex(state.emittedIndex, clamped))) {
                 return;
             }
-            state.directMotion = directMotion;
             state.emittedIndex = clamped;
             state.hasEmittedIndex = true;
             onChange(clamped);
         };
-        const auto scrollToIndex = [center, emitIndex](const MouseScrollEvent& event) {
+        const auto scrollToIndex = [&state, emitIndex](const MouseScrollEvent& event) {
             if (event.stepY == 0.0f) {
                 return;
             }
-            emitIndex(center - event.stepY, true);
+            emitIndex(state.targetIndex - event.stepY, false);
         };
-        const auto beginDrag = [&state, center](const MouseEvent&) {
-            state.dragStartIndex = center;
+        const auto beginDrag = [&state](const MouseEvent&) {
+            state.dragStartIndex = state.targetIndex;
             state.directMotion = true;
-            state.emittedIndex = center;
+            state.emittedIndex = state.targetIndex;
             state.hasEmittedIndex = true;
         };
         const auto dragToIndex = [&state, dragStep, emitIndex](const MouseDragEvent& event) {
@@ -113,9 +136,13 @@ public:
             }
             emitIndex(state.dragStartIndex - event.totalX / dragStep, true);
         };
+        const auto endDrag = [&state](const MouseDragEvent&) {
+            state.directMotion = false;
+        };
         const auto jumpToIndex = [emitIndex](float next) {
             emitIndex(next, false);
         };
+        const bool moving = shouldEmitIndex(state.displayIndex, state.targetIndex);
 
         ui_.stack(id_)
             .size(safeWidth, safeHeight)
@@ -124,6 +151,15 @@ public:
                 if (count == 0) {
                     drawEmptyState(safeWidth, safeHeight);
                     return;
+                }
+
+                if (moving) {
+                    ui_.stack(id_ + ".ticker")
+                        .size(1.0f, 1.0f)
+                        .onFrame([&state](float deltaSeconds) {
+                            advanceDisplayIndex(state, deltaSeconds);
+                        })
+                        .build();
                 }
 
                 mouseArea(ui_, id_ + ".input")
@@ -135,6 +171,7 @@ public:
                     .onScroll(scrollToIndex)
                     .onDragStart(beginDrag)
                     .onDrag(dragToIndex)
+                    .onDragEnd(endDrag)
                     .build();
 
                 const int anchorIndex = static_cast<int>(std::floor(center));
@@ -143,10 +180,9 @@ public:
                     if (itemIndex < 0 || itemIndex >= count) {
                         continue;
                     }
-                    drawCard(itemIndex, cardX, 0.0f, cardWidth, cardHeight, sideStep, center, cardTransition, jumpToIndex, scrollToIndex, beginDrag, dragToIndex);
+                    drawCard(itemIndex, activeCenterX, 0.0f, cardWidth, sideCardWidth, cardHeight, sideStep, center, cardTransition, jumpToIndex, scrollToIndex, beginDrag, dragToIndex, endDrag);
                 }
 
-                drawIndicators(safeWidth, safeHeight, count, static_cast<int>(std::round(center)), jumpToIndex);
             })
             .build();
     }
@@ -155,6 +191,7 @@ private:
     static constexpr float kVisibleDistance = 1.45f;
     static constexpr float kDetailedDistance = 1.05f;
     static constexpr float kInteractiveDistance = 1.30f;
+    static constexpr float kSideCardWidthRatio = 0.38f;
     static constexpr float kIndexEmitThreshold = 0.01f;
     static constexpr float kScrollStep = 0.18f;
     static constexpr float kDragThreshold = 3.0f;
@@ -179,13 +216,29 @@ private:
     struct CarouselState {
         float dragStartIndex = 0.0f;
         float emittedIndex = 0.0f;
+        float boundIndex = 0.0f;
+        float targetIndex = 0.0f;
+        float displayIndex = 0.0f;
         bool directMotion = false;
         bool hasEmittedIndex = false;
+        bool initialized = false;
     };
 
     static CarouselState& stateFor(const std::string& id) {
         static std::unordered_map<std::string, CarouselState> states;
         return states[id];
+    }
+
+    static void advanceDisplayIndex(CarouselState& state, float deltaSeconds) {
+        const float delta = state.targetIndex - state.displayIndex;
+        if (std::fabs(delta) < 0.001f) {
+            state.displayIndex = state.targetIndex;
+            state.directMotion = false;
+            return;
+        }
+        const float speed = state.directMotion ? 36.0f : 18.0f;
+        const float blend = 1.0f - std::exp(-speed * std::clamp(deltaSeconds, 0.0f, 0.08f));
+        state.displayIndex += delta * blend;
     }
 
     void drawEmptyState(float width, float height) {
@@ -211,6 +264,7 @@ private:
                   float baseX,
                   float baseY,
                   float cardWidth,
+                  float sideCardWidth,
                   float cardHeight,
                   float sideStep,
                   float center,
@@ -218,7 +272,8 @@ private:
                   const std::function<void(float)>& onChange,
                   const std::function<void(const MouseScrollEvent&)>& onScroll,
                   const std::function<void(const MouseEvent&)>& onDragStart,
-                  const std::function<void(const MouseDragEvent&)>& onDrag) {
+                  const std::function<void(const MouseDragEvent&)>& onDrag,
+                  const std::function<void(const MouseDragEvent&)>& onDragEnd) {
         const CarouselItem& item = items_[static_cast<std::size_t>(itemIndex)];
         const float distance = static_cast<float>(itemIndex) - center;
         const float absDistance = std::fabs(distance);
@@ -227,50 +282,38 @@ private:
         }
 
         const float focus = 1.0f - std::clamp(absDistance, 0.0f, 1.0f);
-        const float side = smoothAmount(std::min(absDistance, 1.0f));
-        const float scale = 1.0f - side * 0.12f - std::max(0.0f, absDistance - 1.0f) * 0.06f;
-        const float opacity = std::clamp(1.0f - absDistance * 0.24f, 0.28f, 1.0f);
-        const float x = baseX + distance * sideStep;
-        const float y = baseY + side * 18.0f + std::max(0.0f, absDistance - 1.0f) * 8.0f;
-        const float textShift = -distance * parallax_ * 0.08f;
+        const float focusWidth = smoothAmount(focus);
+        const float visualWidth = sideCardWidth + (cardWidth - sideCardWidth) * focusWidth;
+        const float opacity = std::clamp(1.0f - absDistance * 0.16f, 0.48f, 1.0f);
+        const float centerX = baseX + distance * sideStep;
+        const float x = centerX - visualWidth * 0.5f;
+        const float y = baseY;
+        const float imageViewportX = std::max(0.0f, (cardWidth - visualWidth) * 0.5f);
+        const float horizontalInset = std::clamp(visualWidth * 0.08f, 14.0f, 22.0f);
         const int z = 100 - static_cast<int>(std::round(absDistance * 10.0f));
         const bool active = absDistance < 0.55f;
         const bool detailed = absDistance <= kDetailedDistance;
         const bool interactive = absDistance <= kInteractiveDistance;
-        const bool drawShadow = active && style_.shadow.enabled && focus > 0.92f;
         const std::string cardId = id_ + ".card." + std::to_string(itemIndex);
         const bool imageReady = item.source.empty() || core::ImagePrimitive::isSourceReady(item.source);
-        const bool drawSurface = drawShadow || detailed;
 
         ui_.stack(cardId)
             .x(x)
             .y(y)
-            .size(cardWidth, cardHeight)
+            .size(visualWidth, cardHeight)
             .zIndex(z)
             .clip()
-            .scale(scale)
-            .transformOrigin(0.5f, 0.5f)
             .opacity(opacity)
             .transition(cardTransition)
-            .animate(core::AnimProperty::Frame | core::AnimProperty::Transform | core::AnimProperty::Opacity)
+            .animate(core::AnimProperty::Frame | core::AnimProperty::Opacity)
             .content([&] {
-                if (drawSurface) {
-                    ui_.rect(cardId + ".surface")
-                        .size(cardWidth, cardHeight)
-                        .color(style_.background)
-                        .radius(style_.radius)
-                        .border(1.0f, style_.border)
-                        .shadow(drawShadow ? style_.shadow : core::Shadow{})
-                        .build();
-                }
-
                 ui_.stack(cardId + ".image.layer")
-                    .size(cardWidth, cardHeight)
+                    .size(visualWidth, cardHeight)
                     .content([&] {
                         if (!imageReady) {
                             const float loaderSize = std::clamp(cardHeight * 0.22f, 34.0f, 64.0f);
                             ui_.image(cardId + ".loader")
-                                .x((cardWidth - loaderSize) * 0.5f)
+                                .x((visualWidth - loaderSize) * 0.5f)
                                 .y((cardHeight - loaderSize) * 0.5f)
                                 .size(loaderSize, loaderSize)
                                 .source("mona-loading-default.gif")
@@ -282,27 +325,31 @@ private:
                         ui_.image(cardId + ".image")
                             .x(0.0f)
                             .y(0.0f)
-                            .size(cardWidth, cardHeight)
+                            .size(visualWidth, cardHeight)
                             .source(item.source)
                             .cover()
+                            .coverViewport(cardWidth, cardHeight, imageViewportX)
                             .radius(style_.radius)
-                            .transformOrigin(0.5f, 0.5f)
+                            .transition(cardTransition)
+                            .animate(core::AnimProperty::Frame)
                             .build();
 
                         ui_.rect(cardId + ".shade")
-                            .size(cardWidth, cardHeight)
+                            .size(visualWidth, cardHeight)
                             .gradient(style_.overlayTop, style_.overlayBottom, core::GradientDirection::Vertical)
                             .radius(style_.radius)
-                            .opacity(active ? 1.0f : (detailed ? 0.78f : 0.68f))
+                            .opacity(active ? 1.0f : 0.82f)
+                            .transition(cardTransition)
+                            .animate(core::AnimProperty::Frame | core::AnimProperty::Opacity)
                             .build();
                     })
                     .build();
 
                 if (detailed) {
                     ui_.text(cardId + ".title")
-                        .x(22.0f + textShift)
+                        .x(horizontalInset)
                         .y(std::max(0.0f, cardHeight - 64.0f))
-                        .size(std::max(0.0f, cardWidth - 44.0f), 26.0f)
+                        .size(std::max(0.0f, visualWidth - horizontalInset * 2.0f), 26.0f)
                         .text(item.title)
                         .fontSize(active ? 22.0f : 19.0f)
                         .lineHeight(24.0f)
@@ -311,9 +358,9 @@ private:
 
                     if (!item.subtitle.empty()) {
                         ui_.text(cardId + ".subtitle")
-                            .x(22.0f + textShift)
+                            .x(horizontalInset)
                             .y(std::max(0.0f, cardHeight - 35.0f))
-                            .size(std::max(0.0f, cardWidth - 44.0f), 18.0f)
+                            .size(std::max(0.0f, visualWidth - horizontalInset * 2.0f), 18.0f)
                             .text(item.subtitle)
                             .fontSize(14.0f)
                             .lineHeight(18.0f)
@@ -324,7 +371,7 @@ private:
 
                 if (interactive) {
                     mouseArea(ui_, cardId + ".hit")
-                        .size(cardWidth, cardHeight)
+                        .size(visualWidth, cardHeight)
                         .zIndex(20)
                         .radius(style_.radius)
                         .scrollStep(kScrollStep)
@@ -338,35 +385,11 @@ private:
                         .onScroll(onScroll)
                         .onDragStart(onDragStart)
                         .onDrag(onDrag)
+                        .onDragEnd(onDragEnd)
                         .build();
                 }
             })
             .build();
-    }
-
-    void drawIndicators(float width, float height, int count, int activeIndex, const std::function<void(float)>& onChange) {
-        const float dot = 7.0f;
-        const float gap = 7.0f;
-        const float total = static_cast<float>(count) * dot + static_cast<float>(std::max(0, count - 1)) * gap;
-        const float startX = (width - total) * 0.5f;
-        const float y = std::max(0.0f, height - 18.0f);
-        for (int i = 0; i < count; ++i) {
-            const bool active = i == activeIndex;
-            ui_.rect(id_ + ".indicator." + std::to_string(i))
-                .x(startX + static_cast<float>(i) * (dot + gap))
-                .y(y)
-                .size(active ? dot * 2.4f : dot, dot)
-                .color(active ? style_.activeIndicator : style_.indicator)
-                .radius(dot * 0.5f)
-                .transition(transition_)
-                .animate(core::AnimProperty::Frame | core::AnimProperty::Color)
-                .onClick([onChange, i] {
-                    if (onChange) {
-                        onChange(static_cast<float>(i));
-                    }
-                })
-                .build();
-        }
     }
 
     core::dsl::Ui& ui_;

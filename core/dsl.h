@@ -117,6 +117,9 @@ struct Element {
     std::string imageSource;
     bool imageFlipVertically = false;
     ImageFit imageFit = ImageFit::Cover;
+    bool imageHasCoverViewport = false;
+    Vec2 imageCoverViewportSize;
+    Vec2 imageCoverViewportOffset;
 
     bool interactive = false;
     bool focusable = false;
@@ -138,6 +141,7 @@ struct Element {
     std::function<void(const ScrollEvent&)> onScroll;
     std::function<void(const DragEvent&)> onDrag;
     std::function<void()> onTimer;
+    std::function<void(float)> onFrame;
     float timerSeconds = 0.0f;
     std::string visualStateSourceId;
     std::string hoverOpacitySourceId;
@@ -547,6 +551,11 @@ public:
         return self();
     }
 
+    Derived& onFrame(std::function<void(float)> callback) {
+        element_->onFrame = std::move(callback);
+        return self();
+    }
+
     Derived& visualStateFrom(const std::string& id, float pressedScaleValue = 0.965f);
     Derived& hoverOpacityFrom(const std::string& id, float hiddenOpacity = 0.0f, float visibleOpacity = 1.0f);
 
@@ -919,6 +928,13 @@ public:
 
     ImageBuilder& stretch() {
         return fit(ImageFit::Stretch);
+    }
+
+    ImageBuilder& coverViewport(float canvasWidth, float canvasHeight, float offsetX = 0.0f, float offsetY = 0.0f) {
+        element_->imageHasCoverViewport = true;
+        element_->imageCoverViewportSize = {std::max(0.0f, canvasWidth), std::max(0.0f, canvasHeight)};
+        element_->imageCoverViewportOffset = {std::max(0.0f, offsetX), std::max(0.0f, offsetY)};
+        return *this;
     }
 
     ImageBuilder& translate(float xValue, float yValue) {

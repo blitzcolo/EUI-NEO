@@ -573,6 +573,12 @@ void ImagePrimitive::setFit(ImageFit fit) {
     fit_ = fit;
 }
 
+void ImagePrimitive::setCoverViewport(bool enabled, const Vec2& canvasSize, const Vec2& viewportOffset) {
+    hasCoverViewport_ = enabled;
+    coverViewportSize_ = canvasSize;
+    coverViewportOffset_ = viewportOffset;
+}
+
 bool ImagePrimitive::updateTexture() {
     bool pending = false;
     const std::string resolvedPath = resolveImagePath(source_, &pending);
@@ -1023,7 +1029,13 @@ void ImagePrimitive::rebuildVertices(float* vertices) const {
     float u1 = 1.0f;
     float v1 = 1.0f;
     if (fit_ != ImageFit::Stretch && textureWidth_ > 0 && textureHeight_ > 0 && bounds_.width > 0.0f && bounds_.height > 0.0f) {
-        const float rectAspect = bounds_.width / bounds_.height;
+        const bool useCoverViewport = fit_ == ImageFit::Cover &&
+                                      hasCoverViewport_ &&
+                                      coverViewportSize_.x > 0.0f &&
+                                      coverViewportSize_.y > 0.0f;
+        const float sampleWidth = useCoverViewport ? coverViewportSize_.x : bounds_.width;
+        const float sampleHeight = useCoverViewport ? coverViewportSize_.y : bounds_.height;
+        const float rectAspect = sampleWidth / sampleHeight;
         const float imageAspect = static_cast<float>(textureWidth_) / static_cast<float>(textureHeight_);
         if (fit_ == ImageFit::Cover) {
             if (imageAspect > rectAspect) {
@@ -1034,6 +1046,20 @@ void ImagePrimitive::rebuildVertices(float* vertices) const {
                 const float visible = std::clamp(imageAspect / rectAspect, 0.0f, 1.0f);
                 v0 = (1.0f - visible) * 0.5f;
                 v1 = 1.0f - v0;
+            }
+            if (useCoverViewport) {
+                const float left = std::clamp(coverViewportOffset_.x / sampleWidth, 0.0f, 1.0f);
+                const float top = std::clamp(coverViewportOffset_.y / sampleHeight, 0.0f, 1.0f);
+                const float right = std::clamp((coverViewportOffset_.x + bounds_.width) / sampleWidth, left, 1.0f);
+                const float bottom = std::clamp((coverViewportOffset_.y + bounds_.height) / sampleHeight, top, 1.0f);
+                const float fullU0 = u0;
+                const float fullV0 = v0;
+                const float fullU1 = u1;
+                const float fullV1 = v1;
+                u0 = fullU0 + (fullU1 - fullU0) * left;
+                u1 = fullU0 + (fullU1 - fullU0) * right;
+                v0 = fullV0 + (fullV1 - fullV0) * top;
+                v1 = fullV0 + (fullV1 - fullV0) * bottom;
             }
         }
     }

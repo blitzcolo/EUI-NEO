@@ -28,6 +28,7 @@ public:
     void setOpacity(float opacity);
     void setTransform(const Transform& transform);
     void setFit(ImageFit fit);
+    void setCoverViewport(bool enabled, const Vec2& canvasSize, const Vec2& viewportOffset);
 
     bool updateTexture();
     bool hasPendingLoad() const;
@@ -63,6 +64,9 @@ private:
     float opacity_ = 1.0f;
     Transform transform_;
     ImageFit fit_ = ImageFit::Cover;
+    bool hasCoverViewport_ = false;
+    Vec2 coverViewportSize_;
+    Vec2 coverViewportOffset_;
     GLuint texture_ = 0;
     bool ownsTexture_ = false;
     int textureWidth_ = 0;
