@@ -87,11 +87,14 @@ docs/         项目实现文档
 - [布局](docs/布局.md)
 - [事件](docs/事件.md)
 - [动画](docs/动画.md)
+- [异步](docs/异步.md)
 - [渲染流程](docs/渲染流程.md)
 - [图片](docs/图片.md)
 - [网络](docs/网络.md)
 - [平台能力](docs/平台能力.md)
 - [窗口页面](docs/窗口页面.md)
+- [开发与发布](docs/开发与发布.md)
+- [Review 清单](docs/Review清单.md)
 
 ## 当前组件
 

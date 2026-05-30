@@ -87,11 +87,14 @@ docs/         Implementation notes and API documentation
 - [Layout](docs/布局.md)
 - [Events](docs/事件.md)
 - [Animation](docs/动画.md)
+- [Async](docs/异步.md)
 - [Rendering Pipeline](docs/渲染流程.md)
 - [Images](docs/图片.md)
 - [Network](docs/网络.md)
 - [Platform Capabilities](docs/平台能力.md)
 - [Window And Pages](docs/窗口页面.md)
+- [Development And Release](docs/开发与发布.md)
+- [Review Checklist](docs/Review清单.md)
 
 ## Current Components
 
