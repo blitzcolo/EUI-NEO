@@ -66,6 +66,8 @@ sudo apt-get install -y ninja-build libx11-dev libxrandr-dev libxinerama-dev lib
 
 The project creates one executable for each `app/*.cpp` page source, such as `gallery` and `demo`. After build, `assets/` is copied next to the executable automatically.
 
+Tagged releases (`v*`) build Windows, Linux, and macOS packages through GitHub Actions and upload only runtime packages as release assets.
+
 ## Project Layout
 
 ```text

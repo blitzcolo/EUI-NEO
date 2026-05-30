@@ -21,6 +21,8 @@ jobs:
             platform: windows
           - os: ubuntu-latest
             platform: linux
+          - os: macos-latest
+            platform: macos
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -51,6 +53,11 @@ jobs:
         shell: bash
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=ON
 
+      - name: configure macos
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
       - name: build
         run: cmake --build build --config Release --parallel
 
@@ -61,7 +68,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $label = "${{ github.ref_name }}"
           $label = $label -replace '[^A-Za-z0-9._-]', '-'
-          $out = "dist/EUI-NEO-$label-windows-x64.zip"
+          $arch = "${{ runner.arch }}".ToLowerInvariant()
+          $out = "dist/EUI-NEO-$label-windows-$arch.zip"
           $binDir = "build/Release"
 
           $items = @()
@@ -72,22 +80,32 @@ jobs:
 
           Compress-Archive -Path $items.FullName -DestinationPath $out -Force
 
-      - name: package linux
-        if: matrix.platform == 'linux'
+      - name: package unix
+        if: matrix.platform == 'linux' || matrix.platform == 'macos'
         shell: bash
         run: |
           mkdir -p dist
-          label="$(echo "${GITHUB_REF_NAME}" | tr -cs 'A-Za-z0-9._-' '-')"
-          out="dist/EUI-NEO-${label}-linux-x64.tar.gz"
+          label="$(printf '%s' "${GITHUB_REF_NAME}" | tr -cs 'A-Za-z0-9._-' '-')"
+          arch="$(printf '%s' "${RUNNER_ARCH:-X64}" | tr '[:upper:]' '[:lower:]')"
+          out="dist/EUI-NEO-${label}-${{ matrix.platform }}-${arch}.tar.gz"
 
-          mapfile -t bins < <(find build -maxdepth 1 -type f -perm -111)
-          files=("${bins[@]}")
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            glfw_pattern='*/src/libglfw.so*'
+          else
+            glfw_pattern='*/src/libglfw*.dylib'
+          fi
+
+          files=()
+          while IFS= read -r bin; do
+            files+=("$bin")
+          done < <(find build -maxdepth 1 -type f -perm -111)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No executable outputs found in build." >&2
             exit 1
           fi
-          mapfile -t glfw_libs < <(find build/_deps -path '*/src/libglfw.so*' 2>/dev/null || true)
-          files+=("${glfw_libs[@]}")
+          while IFS= read -r lib; do
+            files+=("$lib")
+          done < <(find build/_deps -path "$glfw_pattern" 2>/dev/null || true)
           if [ -d build/assets ]; then
             files+=("build/assets")
           fi
@@ -97,7 +115,7 @@ jobs:
       - name: upload workflow artifact
         uses: actions/upload-artifact@v6
         with:
-          name: EUI-NEO-${{ matrix.platform }}-x64
+          name: EUI-NEO-${{ matrix.platform }}-${{ runner.arch }}
           path: dist/*
           if-no-files-found: error
 
@@ -119,8 +137,8 @@ jobs:
           }
           gh release upload $tag $asset --clobber
 
-      - name: upload linux release asset
-        if: matrix.platform == 'linux' && startsWith(github.ref, 'refs/tags/')
+      - name: upload unix release asset
+        if: (matrix.platform == 'linux' || matrix.platform == 'macos') && startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

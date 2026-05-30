@@ -66,6 +66,8 @@ sudo apt-get install -y ninja-build libx11-dev libxrandr-dev libxinerama-dev lib
 
 项目会为 `app/*.cpp` 下的每个页面源文件生成一个可执行程序，例如 `gallery` 和 `demo`。构建后会自动把 `assets/` 复制到可执行文件目录。
 
+推送 `v*` tag 后，GitHub Actions 会构建 Windows、Linux、macOS 包，并且 release assets 只上传运行包。
+
 ## 目录结构
 
 ```text
