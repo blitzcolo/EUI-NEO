@@ -31,7 +31,6 @@
 #include <unistd.h>
 #endif
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "3rd/stb_image.h"
 
 #if defined(_MSC_VER)

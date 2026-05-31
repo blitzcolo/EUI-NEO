@@ -7,6 +7,7 @@ else()
     set(EUI_NEO_TOP_LEVEL_DEFAULT OFF)
 endif()
 option(EUI_BUILD_APPS "Build EUI-NEO bundled example applications" ${EUI_NEO_TOP_LEVEL_DEFAULT})
+option(EUI_ENABLE_EXPERIMENTAL_VULKAN_BACKEND "Enable incomplete Vulkan backend experiments." OFF)
 set(EUI_WINDOW_BACKEND "glfw" CACHE STRING "Window backend: glfw or sdl2")
 set_property(CACHE EUI_WINDOW_BACKEND PROPERTY STRINGS glfw sdl2)
 set(EUI_RENDER_BACKEND "auto" CACHE STRING "Render backend: auto, opengl, or vulkan")
@@ -18,8 +19,13 @@ if(NOT EUI_RENDER_BACKEND MATCHES "^(auto|opengl|vulkan)$")
     message(FATAL_ERROR "EUI_RENDER_BACKEND must be one of: auto, opengl, vulkan")
 endif()
 
-set(EUI_VULKAN_BACKEND_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/core/render/vulkan/vulkan_backend.cpp")
-if(EXISTS "${EUI_VULKAN_BACKEND_SOURCE}")
+set(EUI_VULKAN_BACKEND_SOURCES
+    core/render/vulkan/vulkan_backend.cpp
+    core/render/vulkan/vulkan_primitives.cpp
+    core/render/vulkan/vulkan_text.cpp
+    core/render/vulkan/vulkan_image.cpp
+)
+if(EUI_ENABLE_EXPERIMENTAL_VULKAN_BACKEND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/render/vulkan/vulkan_backend.cpp")
     set(EUI_VULKAN_BACKEND_IMPLEMENTED ON)
 else()
     set(EUI_VULKAN_BACKEND_IMPLEMENTED OFF)
@@ -35,7 +41,7 @@ if(EUI_RENDER_BACKEND STREQUAL "auto")
     else()
         set(EUI_RESOLVED_RENDER_BACKEND "opengl")
         if(Vulkan_FOUND)
-            message(STATUS "Vulkan SDK found, but EUI Vulkan backend is not implemented yet; falling back to OpenGL.")
+            message(STATUS "Vulkan SDK found, but EUI experimental Vulkan backend is disabled or unavailable; falling back to OpenGL.")
         else()
             message(STATUS "Vulkan SDK not found; falling back to OpenGL.")
         endif()
@@ -45,7 +51,7 @@ elseif(EUI_RENDER_BACKEND STREQUAL "vulkan")
         message(FATAL_ERROR "EUI_RENDER_BACKEND=vulkan requested, but Vulkan SDK was not found.")
     endif()
     if(NOT EUI_VULKAN_BACKEND_IMPLEMENTED)
-        message(FATAL_ERROR "EUI_RENDER_BACKEND=vulkan requested, but the EUI Vulkan backend is not implemented yet.")
+        message(FATAL_ERROR "EUI_RENDER_BACKEND=vulkan requested, but the EUI experimental Vulkan backend is disabled or unavailable. Set EUI_ENABLE_EXPERIMENTAL_VULKAN_BACKEND=ON to build the current clear-only backend.")
     endif()
 endif()
 message(STATUS "EUI render backend: requested=${EUI_RENDER_BACKEND}, resolved=${EUI_RESOLVED_RENDER_BACKEND}")
@@ -71,6 +77,7 @@ set(CORE_SOURCES
     core/platform/platform.cpp
     core/render/image_facade.cpp
     core/render/render_backend.cpp
+    core/render/stb_image_impl.cpp
     core/platform/tray_bridge.c
     core/window/window_backend.cpp
 )
@@ -83,9 +90,7 @@ if(EUI_RESOLVED_RENDER_BACKEND STREQUAL "opengl")
         core/render/opengl/opengl_text.cpp
     )
 elseif(EUI_RESOLVED_RENDER_BACKEND STREQUAL "vulkan")
-    list(APPEND CORE_SOURCES
-        "${EUI_VULKAN_BACKEND_SOURCE}"
-    )
+    list(APPEND CORE_SOURCES ${EUI_VULKAN_BACKEND_SOURCES})
 endif()
 
 if(EUI_WINDOW_BACKEND STREQUAL "glfw")
