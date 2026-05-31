@@ -45,16 +45,18 @@ Build-time sources for GLFW, glad, tray, FreeType, HarfBuzz, libpng, and zlib ar
 GLFW is the default window backend. SDL2 is optional and is not vendored: build it with a system SDL2 package, or explicitly fetch SDL2 during configure:
 
 ```sh
-cmake -S . -B build-sdl2 -DCMAKE_BUILD_TYPE=Release -DEUI_WINDOW_BACKEND=sdl2
-cmake -S . -B build-sdl2-fetch -DCMAKE_BUILD_TYPE=Release -DEUI_WINDOW_BACKEND=sdl2 -DEUI_DEPS_MODE=fetch
+cmake --preset sdl2-release
+cmake --build --preset sdl2-release
+cmake --preset sdl2-fetch-release
+cmake --build --preset sdl2-fetch-release
 ```
 
 macOS / Linux example:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-./build/gallery
+cmake --preset glfw-release
+cmake --build --preset glfw-release
+./build/glfw-release/gallery
 ```
 
 Windows / PowerShell example:

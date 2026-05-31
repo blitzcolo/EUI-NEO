@@ -2,12 +2,12 @@
 
 #include "core/dsl.h"
 #include "core/platform/platform.h"
-#include "core/platform/event.h"
+#include "core/input/input_state.h"
 #include "core/render/image.h"
 #include "core/render/primitive.h"
 #include "core/render/render_backend.h"
 #include "core/render/text.h"
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 #include <algorithm>
 #include <cstddef>

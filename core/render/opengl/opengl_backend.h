@@ -1,19 +1,23 @@
 #pragma once
 
 #include "core/render/render_backend.h"
-
-#include <functional>
+#include "core/window/window_types.h"
 
 namespace core::render::opengl {
 
 class OpenGLRenderBackend final : public RenderBackend {
 public:
-    using Callback = std::function<void()>;
+    explicit OpenGLRenderBackend(core::window::Handle window, OpenGLRenderBackend* shareContext = nullptr);
+    ~OpenGLRenderBackend() override;
 
-    OpenGLRenderBackend(Callback makeCurrent, Callback present);
+    OpenGLRenderBackend(const OpenGLRenderBackend&) = delete;
+    OpenGLRenderBackend& operator=(const OpenGLRenderBackend&) = delete;
+
+    bool initialize();
+    bool valid() const;
 
     void makeCurrent() override;
-    void beginFrame(int framebufferWidth, int framebufferHeight, float dpiScale) override;
+    void beginFrame(const RenderSurface& surface) override;
     void present() override;
     bool ensureRenderCache(int width, int height) override;
     bool renderCacheWasRecreated() const override;
@@ -25,8 +29,10 @@ public:
     void setScissor(bool enabled, const core::Rect& rect, int framebufferHeight) override;
 
 private:
-    Callback makeCurrent_;
-    Callback present_;
+    core::window::Handle window_ = nullptr;
+    OpenGLRenderBackend* shareContext_ = nullptr;
+    void* context_ = nullptr;
+    bool initialized_ = false;
     unsigned int cacheFramebuffer_ = 0;
     unsigned int cacheTexture_ = 0;
     int cacheWidth_ = 0;

@@ -3,6 +3,8 @@
 #include "eui/app.h"
 #include "core/app/app_runner.h"
 #include "core/render/render_backend.h"
+#include "core/render/render_surface.h"
+#include "core/window/window_backend.h"
 
 #include <utility>
 
@@ -87,7 +89,13 @@ public:
             return false;
         }
 
-        renderBackend.beginFrame(metrics.framebufferWidth, metrics.framebufferHeight, metrics.dpiScale);
+        renderBackend.beginFrame({
+            window,
+            core::window::nativeWindowInfo(window),
+            metrics.framebufferWidth,
+            metrics.framebufferHeight,
+            metrics.dpiScale
+        });
         core::render::ScopedRenderBackend scopedRenderBackend(renderBackend);
         app::render(metrics.framebufferWidth, metrics.framebufferHeight, metrics.dpiScale);
         renderBackend.present();

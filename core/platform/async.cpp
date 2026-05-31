@@ -1,5 +1,5 @@
 #include "core/platform/async.h"
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 #include <algorithm>
 #include <condition_variable>

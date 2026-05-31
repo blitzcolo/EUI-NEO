@@ -42,7 +42,7 @@ set(CORE_SOURCES
     core/platform/platform.cpp
     core/render/image_facade.cpp
     core/platform/tray_bridge.c
-    core/platform/window_backend.cpp
+    core/window/window_backend.cpp
 )
 
 if(EUI_RENDER_BACKEND STREQUAL "opengl")

@@ -1,7 +1,7 @@
 #include "core/platform/platform.h"
 
 #include "core/platform/tray_bridge.h"
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 #include <algorithm>
 #include <cstdio>

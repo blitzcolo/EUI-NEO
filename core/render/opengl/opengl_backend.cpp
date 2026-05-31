@@ -6,28 +6,128 @@
 #include <cmath>
 #include <glad/glad.h>
 
-#include <utility>
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+#include <SDL.h>
+#else
+#ifndef GLFW_INCLUDE_NONE
+#define GLFW_INCLUDE_NONE
+#endif
+#include <GLFW/glfw3.h>
+#endif
 
 namespace core::render::opengl {
 
-OpenGLRenderBackend::OpenGLRenderBackend(Callback makeCurrent, Callback present)
-    : makeCurrent_(std::move(makeCurrent)), present_(std::move(present)) {}
+namespace {
 
-void OpenGLRenderBackend::makeCurrent() {
-    if (makeCurrent_) {
-        makeCurrent_();
-    }
+bool& gladLoaded() {
+    static bool loaded = false;
+    return loaded;
 }
 
-void OpenGLRenderBackend::beginFrame(int framebufferWidth, int framebufferHeight, float) {
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+bool loadOpenGLFunctions() {
+    if (gladLoaded()) {
+        return true;
+    }
+    gladLoaded() = gladLoadGLLoader(reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress)) != 0;
+    return gladLoaded();
+}
+#else
+bool loadOpenGLFunctions() {
+    if (gladLoaded()) {
+        return true;
+    }
+    gladLoaded() = gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) != 0;
+    return gladLoaded();
+}
+#endif
+
+} // namespace
+
+OpenGLRenderBackend::OpenGLRenderBackend(core::window::Handle window, OpenGLRenderBackend* shareContext)
+    : window_(window), shareContext_(shareContext) {}
+
+OpenGLRenderBackend::~OpenGLRenderBackend() {
+    if (!initialized_) {
+        return;
+    }
     makeCurrent();
-    glViewport(0, 0, framebufferWidth, framebufferHeight);
+    releaseRenderCache();
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+    if (context_ != nullptr) {
+        SDL_GL_DeleteContext(context_);
+        context_ = nullptr;
+    }
+#endif
+    initialized_ = false;
+}
+
+bool OpenGLRenderBackend::initialize() {
+    if (window_ == nullptr) {
+        return false;
+    }
+
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+    if (shareContext_ != nullptr) {
+        shareContext_->makeCurrent();
+    }
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, shareContext_ != nullptr ? 1 : 0);
+    context_ = SDL_GL_CreateContext(static_cast<SDL_Window*>(window_));
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
+    if (context_ == nullptr) {
+        return false;
+    }
+    makeCurrent();
+    SDL_GL_SetSwapInterval(0);
+#else
+    context_ = window_;
+    makeCurrent();
+    glfwSwapInterval(0);
+#endif
+
+    if (!loadOpenGLFunctions()) {
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+        SDL_GL_DeleteContext(context_);
+        context_ = nullptr;
+#endif
+        return false;
+    }
+
+    initialized_ = true;
+    return true;
+}
+
+bool OpenGLRenderBackend::valid() const {
+    return initialized_ && window_ != nullptr;
+}
+
+void OpenGLRenderBackend::makeCurrent() {
+    if (window_ == nullptr) {
+        return;
+    }
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+    if (context_ != nullptr) {
+        SDL_GL_MakeCurrent(static_cast<SDL_Window*>(window_), context_);
+    }
+#else
+    glfwMakeContextCurrent(static_cast<GLFWwindow*>(window_));
+#endif
+}
+
+void OpenGLRenderBackend::beginFrame(const RenderSurface& surface) {
+    makeCurrent();
+    glViewport(0, 0, surface.framebufferWidth, surface.framebufferHeight);
 }
 
 void OpenGLRenderBackend::present() {
-    if (present_) {
-        present_();
+    if (window_ == nullptr) {
+        return;
     }
+#if defined(EUI_WINDOW_BACKEND_SDL2)
+    SDL_GL_SwapWindow(static_cast<SDL_Window*>(window_));
+#else
+    glfwSwapBuffers(static_cast<GLFWwindow*>(window_));
+#endif
 }
 
 bool OpenGLRenderBackend::ensureRenderCache(int width, int height) {

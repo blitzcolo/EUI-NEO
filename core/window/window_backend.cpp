@@ -1,9 +1,12 @@
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 #include "core/platform/native_bridge.h"
 
 #if defined(EUI_WINDOW_BACKEND_SDL2)
 
 #include <SDL.h>
+#if defined(_WIN32) || defined(__APPLE__)
+#include <SDL_syswm.h>
+#endif
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -13,7 +16,6 @@
 #endif
 #include <windows.h>
 #include <imm.h>
-#include <SDL_syswm.h>
 #endif
 
 namespace core::window {
@@ -42,16 +44,7 @@ LONG roundLong(float value) {
 }
 
 HWND hwndForWindow(Handle window) {
-    if (window == nullptr) {
-        return nullptr;
-    }
-    SDL_SysWMinfo info;
-    SDL_VERSION(&info.version);
-    if (SDL_GetWindowWMInfo(static_cast<SDL_Window*>(window), &info) != SDL_TRUE ||
-        info.subsystem != SDL_SYSWM_WINDOWS) {
-        return nullptr;
-    }
-    return info.info.win.window;
+    return static_cast<HWND>(nativeWindowInfo(window).platformWindow);
 }
 
 } // namespace
@@ -84,6 +77,31 @@ void destroyWindow(Handle window) {
     if (window != nullptr) {
         SDL_DestroyWindow(static_cast<SDL_Window*>(window));
     }
+}
+
+NativeWindowInfo nativeWindowInfo(Handle window) {
+    NativeWindowInfo result;
+    result.handle = window;
+#if defined(_WIN32) || defined(__APPLE__)
+    if (window == nullptr) {
+        return result;
+    }
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (SDL_GetWindowWMInfo(static_cast<SDL_Window*>(window), &info) != SDL_TRUE) {
+        return result;
+    }
+#if defined(_WIN32)
+    if (info.subsystem == SDL_SYSWM_WINDOWS) {
+        result.platformWindow = info.info.win.window;
+    }
+#elif defined(__APPLE__)
+    if (info.subsystem == SDL_SYSWM_COCOA) {
+        result.platformWindow = info.info.cocoa.window;
+    }
+#endif
+#endif
+    return result;
 }
 
 ContextKey currentContextKey() {
@@ -268,6 +286,12 @@ void destroyWindow(Handle window) {
     if (window != nullptr) {
         glfwDestroyWindow(static_cast<GLFWwindow*>(window));
     }
+}
+
+NativeWindowInfo nativeWindowInfo(Handle window) {
+    NativeWindowInfo result;
+    result.handle = window;
+    return result;
 }
 
 ContextKey currentContextKey() {

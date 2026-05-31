@@ -1,7 +1,7 @@
 #include "core/render/image.h"
 #include "core/platform/async.h"
 #include "core/platform/network.h"
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 #include <glad/glad.h>
 

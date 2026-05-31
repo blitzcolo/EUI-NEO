@@ -1,7 +1,7 @@
 #include "core/render/primitive.h"
 
 #include <glad/glad.h>
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 #include <algorithm>
 #include <cmath>

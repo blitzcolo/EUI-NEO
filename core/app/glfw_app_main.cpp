@@ -9,7 +9,6 @@
 #include <mmsystem.h>
 #endif
 
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include "eui/app.h"
@@ -17,8 +16,9 @@
 #include "core/app/dsl_window_manager.h"
 #include "core/app/dsl_window_runtime.h"
 #include "core/app/main_window_runtime.h"
+#include "core/input/input_state.h"
 #include "core/platform/platform.h"
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 #include "core/render/opengl/opengl_backend.h"
 
 #include <algorithm>
@@ -181,7 +181,8 @@ void restoreWindowFromTray(GLFWwindow* window, WindowState& windowState) {
 void installWindowCallbacks(GLFWwindow* window, WindowState& windowState) {
     glfwSetWindowUserPointer(window, &windowState);
     glfwSetFramebufferSizeCallback(window, [](GLFWwindow* currentWindow, int w, int h) {
-        glViewport(0, 0, w, h);
+        (void)w;
+        (void)h;
         static_cast<WindowState*>(glfwGetWindowUserPointer(currentWindow))->needsRender = true;
     });
     glfwSetWindowRefreshCallback(window, [](GLFWwindow* currentWindow) {
@@ -202,12 +203,14 @@ void installWindowCallbacks(GLFWwindow* window, WindowState& windowState) {
     });
 }
 
-std::unique_ptr<ManagedWindow> createManagedWindow(const app::DslWindowRequest& request, GLFWwindow* shareWindow) {
+std::unique_ptr<ManagedWindow> createManagedWindow(const app::DslWindowRequest& request,
+                                                   GLFWwindow* parentWindow,
+                                                   core::render::opengl::OpenGLRenderBackend& shareBackend) {
     core::window::WindowCreateRequest windowRequest;
     windowRequest.width = request.width;
     windowRequest.height = request.height;
     windowRequest.title = request.title.c_str();
-    windowRequest.parent = shareWindow;
+    windowRequest.parent = parentWindow;
     windowRequest.renderApi = core::window::RenderApi::OpenGL;
     GLFWwindow* childWindow = static_cast<GLFWwindow*>(core::window::createWindow(windowRequest));
     if (!childWindow) {
@@ -216,20 +219,17 @@ std::unique_ptr<ManagedWindow> createManagedWindow(const app::DslWindowRequest& 
 
     auto managed = std::make_unique<ManagedWindow>();
     managed->window = childWindow;
-    managed->renderBackend = std::make_unique<core::render::opengl::OpenGLRenderBackend>(
-        [childWindow] {
-            glfwMakeContextCurrent(childWindow);
-        },
-        [childWindow] {
-            glfwSwapBuffers(childWindow);
-        });
+    managed->renderBackend = std::make_unique<core::render::opengl::OpenGLRenderBackend>(childWindow, &shareBackend);
+    if (!managed->renderBackend->initialize()) {
+        core::window::destroyWindow(childWindow);
+        return {};
+    }
     managed->state.lastTitleUpdate = glfwGetTime();
     managed->state.nextFrameTime = managed->state.lastTitleUpdate;
     installWindowCallbacks(childWindow, managed->state);
 
-    glfwMakeContextCurrent(childWindow);
-    glfwSwapInterval(0);
     if (!managed->content.initialize(childWindow, request)) {
+        managed->renderBackend.reset();
         core::releaseInputQueue(childWindow);
         core::window::destroyWindow(childWindow);
         return {};
@@ -248,20 +248,15 @@ void destroyManagedWindow(std::unique_ptr<ManagedWindow>& managed) {
         return;
     }
 
-    GLFWwindow* previousContext = glfwGetCurrentContext();
     GLFWwindow* windowToDestroy = managed->window;
-    glfwMakeContextCurrent(windowToDestroy);
     if (managed->renderBackend) {
+        managed->renderBackend->makeCurrent();
         managed->renderBackend->releaseRenderCache();
     }
     core::releaseInputQueue(windowToDestroy);
     managed->content.shutdown(false);
+    managed->renderBackend.reset();
     core::window::destroyWindow(windowToDestroy);
-    if (previousContext != windowToDestroy) {
-        glfwMakeContextCurrent(previousContext);
-    } else {
-        glfwMakeContextCurrent(nullptr);
-    }
     managed.reset();
 }
 
@@ -270,7 +265,7 @@ bool updateManagedWindow(ManagedWindow& managed, float deltaSeconds, bool extern
         return false;
     }
 
-    glfwMakeContextCurrent(managed.window);
+    managed.renderBackend->makeCurrent();
 
     int framebufferWidth = 0;
     int framebufferHeight = 0;
@@ -290,7 +285,13 @@ bool updateManagedWindow(ManagedWindow& managed, float deltaSeconds, bool extern
     }
 
     if (managed.state.needsRender || managed.content.needsRender()) {
-        managed.renderBackend->beginFrame(framebufferWidth, framebufferHeight, dpiScale);
+        managed.renderBackend->beginFrame({
+            managed.window,
+            core::window::nativeWindowInfo(managed.window),
+            framebufferWidth,
+            framebufferHeight,
+            dpiScale
+        });
         managed.content.render(*managed.renderBackend, framebufferWidth, framebufferHeight, dpiScale);
         managed.renderBackend->present();
         managed.state.needsRender = false;
@@ -309,12 +310,12 @@ void pruneClosedWindows(app::DslWindowManager<ManagedWindow>& windows) {
 
 void createRequestedWindows(app::DslWindowManager<ManagedWindow>& windows,
                             GLFWwindow* shareWindow,
+                            core::render::opengl::OpenGLRenderBackend& shareBackend,
                             const std::vector<app::DslWindowRequest>& requests) {
-    GLFWwindow* previousContext = glfwGetCurrentContext();
     windows.createPending(requests, [&](const app::DslWindowRequest& request) {
-        return createManagedWindow(request, shareWindow);
+        return createManagedWindow(request, shareWindow, shareBackend);
     });
-    glfwMakeContextCurrent(previousContext);
+    shareBackend.makeCurrent();
 }
 
 GLFWwindow* findModalChildWindow(app::DslWindowManager<ManagedWindow>& windows) {
@@ -339,9 +340,6 @@ int main() {
         return -1;
     }
 
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(0);
-
     WindowState windowState;
     windowState.resetTiming(glfwGetTime());
     updateFrameInterval(window, windowState, windowState.lastTitleUpdate, true);
@@ -358,23 +356,18 @@ int main() {
         glfwTerminate();
     };
 
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    auto renderBackend = std::make_unique<core::render::opengl::OpenGLRenderBackend>(window);
+    if (!renderBackend->initialize()) {
         cleanupMainWindow();
         return -1;
     }
 
     if (!app::initialize(window)) {
         app::shutdown();
+        renderBackend.reset();
         cleanupMainWindow();
         return -1;
     }
-    core::render::opengl::OpenGLRenderBackend renderBackend(
-        [&] {
-            glfwMakeContextCurrent(window);
-        },
-        [&] {
-            glfwSwapBuffers(window);
-        });
     app::MainWindowRuntime mainWindowRuntime(windowState);
     windowState.initializeTray();
     glfwSetWindowCloseCallback(window, [](GLFWwindow* currentWindow) {
@@ -399,7 +392,7 @@ int main() {
     app::DslWindowManager<ManagedWindow> childWindows;
 
     while (!glfwWindowShouldClose(window)) {
-        glfwMakeContextCurrent(window);
+        renderBackend->makeCurrent();
         windowState.pollTray(false);
         if (windowState.consumeTrayExitRequested()) {
             windowState.forceClose = true;
@@ -415,7 +408,7 @@ int main() {
             windowState.hideToTrayRequested = false;
         }
         if (windowState.hideToTrayRequested) {
-            renderBackend.releaseRenderCache();
+            renderBackend->releaseRenderCache();
             hideWindowToTray(window, windowState);
         }
         if (windowState.hiddenToTray) {
@@ -454,13 +447,13 @@ int main() {
 
         mainWindowRuntime.runFrame(
             window,
-            renderBackend,
+            *renderBackend,
             {framebufferWidth, framebufferHeight, dpiScale, pointerScale},
             currentFrameTime,
             getWindowRefreshRate(window),
             mainInputEnabled,
             [&] {
-                createRequestedWindows(childWindows, window, app::consumeWindowRequests());
+                createRequestedWindows(childWindows, window, *renderBackend, app::consumeWindowRequests());
                 pruneClosedWindows(childWindows);
                 windowState.modalChildWindow = findModalChildWindow(childWindows);
             },
@@ -469,7 +462,7 @@ int main() {
                     updateManagedWindow(managed, frameDelta, frameExternalReady);
                 });
 
-                createRequestedWindows(childWindows, window, app::consumeWindowRequests());
+                createRequestedWindows(childWindows, window, *renderBackend, app::consumeWindowRequests());
                 pruneClosedWindows(childWindows);
                 windowState.modalChildWindow = findModalChildWindow(childWindows);
             },
@@ -490,10 +483,11 @@ int main() {
 
     childWindows.destroyAll(destroyManagedWindow);
     core::releaseInputQueue(window);
-    glfwMakeContextCurrent(window);
-    renderBackend.releaseRenderCache();
+    renderBackend->makeCurrent();
+    renderBackend->releaseRenderCache();
     core::platform::shutdownTray();
     app::shutdown();
+    renderBackend.reset();
     glfwTerminate();
     return 0;
 }

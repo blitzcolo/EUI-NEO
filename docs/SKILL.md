@@ -68,7 +68,8 @@ Do not write code as if this were an immediate-mode raw OpenGL app. The DSL is t
 - `components/theme.h`: theme tokens and visual helpers
 - `core/dsl.h`: DSL builders and shared element properties
 - `core/layout.h`: layout rules for `Row`, `Column`, `Stack`
-- `core/platform/event.h`: pointer, focus, text input, drag, scroll
+- `core/input/input_types.h`: backend-neutral pointer, keyboard, scroll, focus, drag types
+- `core/input/input_state.h`: input queues, backend callbacks, pointer reads
 - `core/async.*`: background work queue
 - `core/network.*`: simple GET/text/image networking
 

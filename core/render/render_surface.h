@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/platform/window_types.h"
+#include "core/window/window_types.h"
 
 namespace core::render {
 

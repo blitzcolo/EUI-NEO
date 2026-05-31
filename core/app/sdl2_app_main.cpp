@@ -9,25 +9,21 @@
 #include <mmsystem.h>
 #endif
 
-#include <glad/glad.h>
 #ifndef SDL_MAIN_HANDLED
 #define SDL_MAIN_HANDLED
 #endif
 #include <SDL.h>
-#if defined(_WIN32) || defined(__APPLE__)
-#include <SDL_syswm.h>
-#endif
 
 #include "eui/app.h"
 #include "core/app/app_runner.h"
 #include "core/app/dsl_window_manager.h"
 #include "core/app/dsl_window_runtime.h"
 #include "core/app/main_window_runtime.h"
-#include "core/platform/event.h"
+#include "core/input/input_state.h"
 #include "core/platform/platform.h"
 #include "core/platform/native_bridge.h"
 #include "core/render/opengl/opengl_backend.h"
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 #include <algorithm>
 #include <chrono>
@@ -44,7 +40,6 @@ struct WindowState : app::AppRunner {
 
 struct ManagedWindow {
     SDL_Window* window = nullptr;
-    SDL_GLContext context = nullptr;
     bool closeRequested = false;
     SDL_Window* parentWindow = nullptr;
     app::DslWindowRuntime content;
@@ -89,33 +84,9 @@ double refreshRate(SDL_Window* window) {
     return 60.0;
 }
 
-void* nativeWindowHandle(SDL_Window* window) {
-#if defined(_WIN32) || defined(__APPLE__)
-    if (window == nullptr) {
-        return nullptr;
-    }
-    SDL_SysWMinfo info;
-    SDL_VERSION(&info.version);
-    if (SDL_GetWindowWMInfo(window, &info) != SDL_TRUE) {
-        return nullptr;
-    }
-#if defined(_WIN32)
-    if (info.subsystem != SDL_SYSWM_WINDOWS) {
-        return nullptr;
-    }
-    return info.info.win.window;
-#elif defined(__APPLE__)
-    return info.info.cocoa.window;
-#endif
-#else
-    (void)window;
-    return nullptr;
-#endif
-}
-
 float dpiScale(SDL_Window* window) {
 #ifdef _WIN32
-    HWND hwnd = static_cast<HWND>(nativeWindowHandle(window));
+    HWND hwnd = static_cast<HWND>(core::window::nativeWindowInfo(window).platformWindow);
     if (hwnd != nullptr) {
         const UINT dpi = GetDpiForWindow(hwnd);
         if (dpi > 0) {
@@ -127,11 +98,15 @@ float dpiScale(SDL_Window* window) {
 }
 
 void attachNativeChildWindow(SDL_Window* parentWindow, SDL_Window* childWindow) {
-    eui_set_native_child_window(nativeWindowHandle(parentWindow), nativeWindowHandle(childWindow), 1);
+    eui_set_native_child_window(core::window::nativeWindowInfo(parentWindow).platformWindow,
+                                core::window::nativeWindowInfo(childWindow).platformWindow,
+                                1);
 }
 
 void detachNativeChildWindow(SDL_Window* parentWindow, SDL_Window* childWindow) {
-    eui_set_native_child_window(nativeWindowHandle(parentWindow), nativeWindowHandle(childWindow), 0);
+    eui_set_native_child_window(core::window::nativeWindowInfo(parentWindow).platformWindow,
+                                core::window::nativeWindowInfo(childWindow).platformWindow,
+                                0);
 }
 
 void updateFrameInterval(SDL_Window* window, WindowState& state) {
@@ -256,8 +231,7 @@ void processMainEvent(SDL_Window* window, WindowState& state, const SDL_Event& e
 
 std::unique_ptr<ManagedWindow> createManagedWindow(const app::DslWindowRequest& request,
                                                    SDL_Window* parentWindow,
-                                                   SDL_GLContext shareContext) {
-    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, shareContext != nullptr ? 1 : 0);
+                                                   core::render::opengl::OpenGLRenderBackend& shareBackend) {
     core::window::WindowCreateRequest windowRequest;
     windowRequest.width = request.width;
     windowRequest.height = request.height;
@@ -265,32 +239,20 @@ std::unique_ptr<ManagedWindow> createManagedWindow(const app::DslWindowRequest& 
     windowRequest.parent = parentWindow;
     windowRequest.renderApi = core::window::RenderApi::OpenGL;
     SDL_Window* window = static_cast<SDL_Window*>(core::window::createWindow(windowRequest));
-    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
     if (window == nullptr) {
         return {};
     }
 
-    SDL_GLContext context = SDL_GL_CreateContext(window);
-    if (context == nullptr) {
+    auto managed = std::make_unique<ManagedWindow>();
+    managed->window = window;
+    managed->parentWindow = parentWindow;
+    managed->renderBackend = std::make_unique<core::render::opengl::OpenGLRenderBackend>(window, &shareBackend);
+    if (!managed->renderBackend->initialize()) {
         core::window::destroyWindow(window);
         return {};
     }
-    SDL_GL_MakeCurrent(window, context);
-    SDL_GL_SetSwapInterval(0);
-
-    auto managed = std::make_unique<ManagedWindow>();
-    managed->window = window;
-    managed->context = context;
-    managed->parentWindow = parentWindow;
-    managed->renderBackend = std::make_unique<core::render::opengl::OpenGLRenderBackend>(
-        [window, context] {
-            SDL_GL_MakeCurrent(window, context);
-        },
-        [window] {
-            SDL_GL_SwapWindow(window);
-        });
     if (!managed->content.initialize(window, request)) {
-        SDL_GL_DeleteContext(context);
+        managed->renderBackend.reset();
         core::window::destroyWindow(window);
         return {};
     }
@@ -306,24 +268,24 @@ void destroyManagedWindow(std::unique_ptr<ManagedWindow>& managed) {
     if (!managed) {
         return;
     }
-    if (managed->window != nullptr && managed->context != nullptr) {
+    if (managed->window != nullptr && managed->renderBackend != nullptr) {
         if (managed->content.request().modal && managed->parentWindow != nullptr) {
             detachNativeChildWindow(managed->parentWindow, managed->window);
         }
-        SDL_GL_MakeCurrent(managed->window, managed->context);
+        managed->renderBackend->makeCurrent();
         if (managed->renderBackend) {
             managed->renderBackend->releaseRenderCache();
         }
         core::releaseInputQueue(managed->window);
         managed->content.shutdown(false);
-        SDL_GL_DeleteContext(managed->context);
+        managed->renderBackend.reset();
         core::window::destroyWindow(managed->window);
     }
     managed.reset();
 }
 
 bool isManagedWindowClosed(const ManagedWindow& managed) {
-    return managed.closeRequested || managed.window == nullptr || managed.context == nullptr;
+    return managed.closeRequested || managed.window == nullptr || managed.renderBackend == nullptr;
 }
 
 void pruneClosedWindows(app::DslWindowManager<ManagedWindow>& windows) {
@@ -332,12 +294,12 @@ void pruneClosedWindows(app::DslWindowManager<ManagedWindow>& windows) {
 
 void createRequestedWindows(app::DslWindowManager<ManagedWindow>& windows,
                             SDL_Window* mainWindow,
-                            SDL_GLContext mainContext,
+                            core::render::opengl::OpenGLRenderBackend& mainBackend,
                             const std::vector<app::DslWindowRequest>& requests) {
-    SDL_GL_MakeCurrent(mainWindow, mainContext);
+    mainBackend.makeCurrent();
     windows.createPending(requests, [&](const app::DslWindowRequest& request) {
-        std::unique_ptr<ManagedWindow> managed = createManagedWindow(request, mainWindow, mainContext);
-        SDL_GL_MakeCurrent(mainWindow, mainContext);
+        std::unique_ptr<ManagedWindow> managed = createManagedWindow(request, mainWindow, mainBackend);
+        mainBackend.makeCurrent();
         return managed;
     });
 }
@@ -390,11 +352,11 @@ void processManagedEvent(ManagedWindow& managed, const SDL_Event& event) {
 }
 
 bool updateManagedWindow(ManagedWindow& managed, float deltaSeconds, bool externalReady) {
-    if (managed.closeRequested || managed.window == nullptr || managed.context == nullptr) {
+    if (managed.closeRequested || managed.window == nullptr || managed.renderBackend == nullptr) {
         return false;
     }
 
-    SDL_GL_MakeCurrent(managed.window, managed.context);
+    managed.renderBackend->makeCurrent();
     int drawableWidth = 0;
     int drawableHeight = 0;
     SDL_GL_GetDrawableSize(managed.window, &drawableWidth, &drawableHeight);
@@ -408,7 +370,13 @@ bool updateManagedWindow(ManagedWindow& managed, float deltaSeconds, bool extern
 
     managed.content.update(managed.window, deltaSeconds, logicalWidth, logicalHeight, pointer, dpi, externalReady);
     if (managed.content.needsRender()) {
-        managed.renderBackend->beginFrame(drawableWidth, drawableHeight, dpi);
+        managed.renderBackend->beginFrame({
+            managed.window,
+            core::window::nativeWindowInfo(managed.window),
+            drawableWidth,
+            drawableHeight,
+            dpi
+        });
         managed.content.render(*managed.renderBackend, drawableWidth, drawableHeight, dpi);
         managed.renderBackend->present();
     }
@@ -440,16 +408,8 @@ int main() {
         return -1;
     }
 
-    SDL_GLContext context = SDL_GL_CreateContext(window);
-    if (context == nullptr) {
-        core::window::destroyWindow(window);
-        SDL_Quit();
-        return -1;
-    }
-    SDL_GL_MakeCurrent(window, context);
-    SDL_GL_SetSwapInterval(0);
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress))) {
-        SDL_GL_DeleteContext(context);
+    auto renderBackend = std::make_unique<core::render::opengl::OpenGLRenderBackend>(window);
+    if (!renderBackend->initialize()) {
         core::window::destroyWindow(window);
         SDL_Quit();
         return -1;
@@ -457,7 +417,7 @@ int main() {
 
     if (!app::initialize(window)) {
         app::shutdown();
-        SDL_GL_DeleteContext(context);
+        renderBackend.reset();
         core::window::destroyWindow(window);
         SDL_Quit();
         return -1;
@@ -468,14 +428,7 @@ int main() {
     state.resetTiming(core::window::timeSeconds());
     updateFrameInterval(window, state);
     state.initializeTray();
-    core::render::opengl::OpenGLRenderBackend renderBackend(
-        [&] {
-            SDL_GL_MakeCurrent(window, context);
-        },
-        [&] {
-            SDL_GL_SwapWindow(window);
-        });
-    state.renderBackend = &renderBackend;
+    state.renderBackend = renderBackend.get();
     app::MainWindowRuntime mainWindowRuntime(state);
 
     app::DslWindowManager<ManagedWindow> childWindows;
@@ -557,19 +510,19 @@ int main() {
         const float pointer = pointerScale(window);
         mainWindowRuntime.runFrame(
             window,
-            renderBackend,
+            *renderBackend,
             {drawableWidth, drawableHeight, dpi, pointer},
             now,
             refreshRate(window),
             findModalWindow(childWindows) == nullptr,
             [&] {
-                createRequestedWindows(childWindows, window, context, app::consumeWindowRequests());
+                createRequestedWindows(childWindows, window, *renderBackend, app::consumeWindowRequests());
             },
             [&](float frameDelta, bool frameExternalReady) {
                 childWindows.updateAll([&](ManagedWindow& managed) {
                     updateManagedWindow(managed, frameDelta, frameExternalReady);
                 });
-                createRequestedWindows(childWindows, window, context, app::consumeWindowRequests());
+                createRequestedWindows(childWindows, window, *renderBackend, app::consumeWindowRequests());
             },
             [&](const char* title) {
                 SDL_SetWindowTitle(window, title);
@@ -582,10 +535,11 @@ int main() {
     childWindows.destroyAll(destroyManagedWindow);
     core::releaseInputQueue(window);
     core::platform::shutdownTray();
-    renderBackend.releaseRenderCache();
+    renderBackend->makeCurrent();
+    renderBackend->releaseRenderCache();
     app::shutdown();
+    renderBackend.reset();
     SDL_StopTextInput();
-    SDL_GL_DeleteContext(context);
     core::window::destroyWindow(window);
     SDL_Quit();
     return 0;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/platform/window_types.h"
+#include "core/window/window_types.h"
 
 #include <string>
 
@@ -8,6 +8,7 @@ namespace core::window {
 
 Handle createWindow(const WindowCreateRequest& request);
 void destroyWindow(Handle window);
+NativeWindowInfo nativeWindowInfo(Handle window);
 
 ContextKey currentContextKey();
 double timeSeconds();

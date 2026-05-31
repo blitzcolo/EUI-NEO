@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "core/platform/window_backend.h"
+#include "core/window/window_backend.h"
 
 namespace core::platform {
 

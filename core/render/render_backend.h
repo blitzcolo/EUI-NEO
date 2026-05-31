@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/render/render_surface.h"
+
 namespace core {
 struct Color;
 struct Rect;
@@ -12,7 +14,7 @@ public:
     virtual ~RenderBackend() = default;
 
     virtual void makeCurrent() = 0;
-    virtual void beginFrame(int framebufferWidth, int framebufferHeight, float dpiScale) = 0;
+    virtual void beginFrame(const RenderSurface& surface) = 0;
     virtual void present() = 0;
     virtual bool ensureRenderCache(int width, int height) = 0;
     virtual bool renderCacheWasRecreated() const = 0;
