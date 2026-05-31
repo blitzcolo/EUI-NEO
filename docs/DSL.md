@@ -66,7 +66,7 @@ static const DslAppConfig config = DslAppConfig{}
 
 托盘后台运行默认关闭。需要托盘的页面可以在 `DslAppConfig` 中显式调用 `.tray(true)`，例如串口工具。启用托盘后，关闭或最小化窗口会隐藏到托盘并释放图形资源；托盘 `Show` 会重新显示窗口，`Exit` 才真正退出。
 
-不设置 `.textFont(...)` 时使用 `core/render/text.cpp` 顶部的全局默认文本字体；不设置 `.iconFont(...)` 时使用全局默认图标字体。
+不设置 `.textFont(...)` 时使用 `core/render/opengl/opengl_text.cpp` 顶部的全局默认文本字体；不设置 `.iconFont(...)` 时使用全局默认图标字体。
 
 ## 布局 DSL
 
@@ -236,7 +236,7 @@ Text 支持：
 .lineHeight(...)
 ```
 
-`.icon(...)` 会自动使用图标字体；图标字体默认来自 `core/render/text.cpp`，也可以通过配置里的 `.iconFont(...)` 按 app 覆盖。
+`.icon(...)` 会自动使用图标字体；图标字体默认来自 `core/render/opengl/opengl_text.cpp`，也可以通过配置里的 `.iconFont(...)` 按 app 覆盖。
 
 底层文本使用 FreeType 渲染 glyph，启用 HarfBuzz 时会进行复杂文本 shaping。`fontFamily("monospace")` 是跨平台等宽字体别名，`fontFamily("Emoji")` 会选择平台 emoji 字体。需要精确光标位置或命中测试时，使用 `core::TextPrimitive::measureTextMetrics(...)` 获取 shaped caret stops；返回的 `byteIndices` 是 UTF-8 byte offset，`caretX` 是对应的逻辑 x，和实际渲染使用同一套 fallback、emoji 缩放和 glyph advance。
 

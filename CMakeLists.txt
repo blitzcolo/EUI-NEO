@@ -40,9 +40,7 @@ set(CORE_SOURCES
     core/platform/network.cpp
     core/platform/native_bridge.c
     core/platform/platform.cpp
-    core/render/image.cpp
     core/render/image_facade.cpp
-    core/render/text.cpp
     core/platform/tray_bridge.c
     core/platform/window_backend.cpp
 )
@@ -50,7 +48,9 @@ set(CORE_SOURCES
 if(EUI_RENDER_BACKEND STREQUAL "opengl")
     list(APPEND CORE_SOURCES
         core/render/opengl/opengl_backend.cpp
+        core/render/opengl/opengl_image.cpp
         core/render/opengl/opengl_primitives.cpp
+        core/render/opengl/opengl_text.cpp
     )
 endif()
 
