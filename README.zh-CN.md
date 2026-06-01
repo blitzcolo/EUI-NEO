@@ -10,8 +10,8 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
   <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white">
   <img alt="CMake 3.14+" src="https://img.shields.io/badge/CMake-3.14%2B-064F8C?logo=cmake&logoColor=white">
-  <img alt="OpenGL" src="https://img.shields.io/badge/OpenGL-rendering-5586A4?logo=opengl&logoColor=white">
-  <img alt="GLFW" src="https://img.shields.io/badge/GLFW-windowing-111111">
+  <img alt="OpenGL / Vulkan" src="https://img.shields.io/badge/OpenGL%20%2F%20Vulkan-rendering-5586A4?logo=vulkan&logoColor=white">
+  <img alt="GLFW / SDL2" src="https://img.shields.io/badge/GLFW%20%2F%20SDL2-windowing-111111">
   <a href="https://github.com/sudoevolve/EUI-NEO/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/sudoevolve/EUI-NEO?style=flat"></a>
 </p>
 
@@ -21,7 +21,7 @@
   <a href="https://sudoevolve.github.io/pages/eui-neo.html">官网</a>
 </p>
 
-EUI-NEO 是一个基于 C++17、OpenGL 和 GLFW 的跨平台高性能轻量级 UI 框架，低占用、开箱即用。
+EUI-NEO 是一个基于 C++17 的跨平台高性能轻量级 UI 框架，支持 GLFW/SDL2 窗口后端和 OpenGL/Vulkan 渲染后端。
 
 ## 预览
 
@@ -37,8 +37,8 @@ EUI-NEO 是一个基于 C++17、OpenGL 和 GLFW 的跨平台高性能轻量级 U
 
 - CMake 3.14+
 - 支持 C++17 的编译器
-- OpenGL
-- Vulkan SDK 可选。默认渲染后端选择是 `auto`：EUI Vulkan 后端可用且检测到 SDK 时使用 Vulkan，否则回退 OpenGL。
+- OpenGL 开发文件。
+- Vulkan SDK 可选。默认渲染后端选择是 `auto`：检测到 SDK 时使用 Vulkan，否则回退 OpenGL。使用 `opengl-glfw-release` 或 `opengl-sdl2-release` 可强制 OpenGL。
 - 平台 OpenGL/windowing 开发文件。Linux 构建还需要 X11 和 libcurl 开发包。
 
 GLFW、glad、tray、FreeType、HarfBuzz、libpng、zlib 等构建期第三方源码已内置在 `3rd/` 下。默认依赖模式是 `auto`：本地 `3rd/` 源码存在时直接使用，缺失时才从固定上游地址联网拉取。需要严格离线构建时，可配置 `-DEUI_DEPS_MODE=bundled`；需要强制联网拉取时，可配置 `-DEUI_DEPS_MODE=fetch`。HarfBuzz shaping 默认启用，可通过 `-DEUI_ENABLE_HARFBUZZ=OFF` 关闭。
@@ -60,6 +60,15 @@ cmake --build --preset glfw-release
 ./build/glfw-release/gallery
 ```
 
+显式选择渲染后端示例：
+
+```sh
+cmake --preset opengl-glfw-release
+cmake --build --preset opengl-glfw-release --target gallery
+cmake --preset vulkan-glfw-release
+cmake --build --preset vulkan-glfw-release --target gallery
+```
+
 Windows / PowerShell 示例：
 
 ```powershell
@@ -76,7 +85,7 @@ sudo apt-get install -y ninja-build libx11-dev libxrandr-dev libxinerama-dev lib
 sudo apt-get install -y libsdl2-dev
 ```
 
-顶层构建会为 `examples/*.cpp` 下的每个页面源文件生成一个可执行程序，例如 `gallery` 和 `demo`。构建后会自动把 `assets/` 复制到可执行文件目录。
+顶层构建会为 `examples/*.cpp` 下的每个页面源文件生成一个可执行程序，例如 `gallery` 和 `eui_demo`。构建后会自动把 `assets/` 复制到可执行文件目录。
 
 推送 `v*` tag 后，GitHub Actions 会构建 Windows、Linux、macOS 包，并且 release assets 只上传运行包。
 
@@ -101,13 +110,13 @@ add_executable(my_app external/EUI-NEO/core/app/glfw_app_main.cpp app.cpp)
 eui_neo_configure_app(my_app)
 ```
 
-然后在 `app.cpp` 里实现 `app::dslAppConfig()` 和 `app::compose()`。EUI-NEO 会接管窗口、事件循环、OpenGL 渲染和资源复制。这里是“单个公共 facade 头文件入口”，不是纯 header-only 库。
+然后在 `app.cpp` 里实现 `app::dslAppConfig()` 和 `app::compose()`。EUI-NEO 会接管窗口、事件循环、当前选择的渲染后端和资源复制。这里是“单个公共 facade 头文件入口”，不是纯 header-only 库。
 
 默认窗口后端是 GLFW。需要 SDL2 时，配置 `-DEUI_WINDOW_BACKEND=sdl2`，并把 app main 换成 `external/EUI-NEO/core/app/sdl2_app_main.cpp`。
 
 ### 2. 静态库方式
 
-如果你的项目已经有自己的 main、窗口、OpenGL context 或事件循环，可以直接链接导出的静态库 target：
+如果你的项目已经有自己的 main、窗口、渲染 context 或事件循环，可以直接链接导出的静态库 target：
 
 ```cmake
 add_subdirectory(external/EUI-NEO)
@@ -123,7 +132,7 @@ eui_neo_copy_assets(my_app)
 
 快速实验或新增内置示例时，直接创建 `examples/my_app.cpp`，包含 `eui_neo.h`，实现 `app::dslAppConfig()` 和 `app::compose()`。顶层构建会自动为每个 `examples/*.cpp` 生成一个可执行程序。
 
-EUI-NEO 作为子目录接入时，默认不会构建仓库自带示例。需要构建 `gallery`、`demo`、`serial_tool` 等示例时，配置 `-DEUI_BUILD_APPS=ON`。完整 CMake 片段、`FetchContent` 和嵌入已有 GLFW 主循环的写法见 [集成指南](docs/集成指南.md)。
+EUI-NEO 作为子目录接入时，默认不会构建仓库自带示例。需要构建 `gallery`、`eui_demo`、`serial_tool` 等示例时，配置 `-DEUI_BUILD_APPS=ON`。完整 CMake 片段、`FetchContent` 和嵌入已有 GLFW 主循环的写法见 [集成指南](docs/集成指南.md)。
 
 ## 目录结构
 
@@ -132,8 +141,9 @@ assets/       字体、PNG、SVG 和图标等运行资源
 components/   基于 DSL 封装的通用组件
 core/         DSL、Runtime、图元、文本、图片、网络和平台能力
 docs/         项目实现文档
-examples/     独立 gallery 和 demo 应用源码
+examples/     独立 gallery 和示例应用源码
 include/      公共 include 路径：eui_neo.h 和 eui/* facade 头文件
+tests/        本地验证记录和测试数据
 3rd/          内置第三方构建源码和单文件依赖
 ```
 
@@ -141,19 +151,19 @@ include/      公共 include 路径：eui_neo.h 和 eui/* facade 头文件
 
 - [DSL 设计与当前实现](docs/DSL.md)
 - [组件](docs/组件.md)
-- [基础图元与文本图元](docs/基础图元文本图元.md)
 - [布局](docs/布局.md)
 - [事件](docs/事件.md)
 - [动画](docs/动画.md)
 - [异步](docs/异步.md)
 - [渲染流程](docs/渲染流程.md)
+- [渲染后端架构](docs/渲染后端架构.md)
 - [图片](docs/图片.md)
 - [网络](docs/网络.md)
 - [平台能力](docs/平台能力.md)
-- [窗口页面](docs/窗口页面.md)
 - [集成指南](docs/集成指南.md)
 - [开发与发布](docs/开发与发布.md)
 - [Review 清单](docs/Review清单.md)
+- [内存占用记录](tests/内存占用.md)
 
 ## 当前组件
 
@@ -167,7 +177,7 @@ include/      公共 include 路径：eui_neo.h 和 eui/* facade 头文件
 - 图表：`linechart`（`lineChart` 兼容别名）、`barchart`（`barChart` 兼容别名）、`piechart`（`pieChart` 兼容别名）
 - 输入热区：`mouseArea`
 
-组件只组合 DSL 树，不直接持有 OpenGL primitive。业务状态仍然放在页面或业务层，通过 builder 参数传入当前值，再从回调写回 next value。
+组件只组合 DSL 树，不直接持有后端 primitive。业务状态仍然放在页面或业务层，通过 builder 参数传入当前值，再从回调写回 next value。
 
 ## 许可
 

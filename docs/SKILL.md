@@ -5,7 +5,7 @@ description: Use this skill when developing or modifying EUI-NEO apps, DSL pages
 
 # EUI-NEO Developer Skill
 
-This repository is a C++17 UI framework built on OpenGL + GLFW. The recommended development surface is:
+This repository is a C++17 UI framework with GLFW/SDL2 window backends and OpenGL/Vulkan render backends. The recommended development surface is:
 
 - `examples/*.cpp` for standalone app pages and demos
 - `components/*.h` for reusable UI components
@@ -17,7 +17,7 @@ Use this skill when the task is to build a page, add a component, extend an exis
 
 - `core/app/glfw_app_main.cpp` owns the GLFW window loop, frame throttling, render scheduling, tray behavior, and multi-window lifecycle.
 - `include/eui/dsl_app.h` is the main app adapter. Most app work only needs `dslAppConfig()` and `compose(...)`.
-- `components/` is a thin builder layer over the DSL. Components do not own OpenGL primitives directly.
+- `components/` is a thin builder layer over the DSL. Components do not own backend primitives directly.
 - `core/` contains the real engine pieces: DSL, runtime, layout, events, animation, text, image, async, network, platform.
 - `CMakeLists.txt` builds one executable per `examples/*.cpp`.
 
@@ -25,11 +25,11 @@ Use this skill when the task is to build a page, add a component, extend an exis
 
 Before making substantial changes, read only the docs relevant to the request:
 
-- App/page work: [窗口页面.md](窗口页面.md), [DSL.md](DSL.md), [布局.md](布局.md), [事件.md](事件.md)
+- App/page work: [集成指南.md](集成指南.md), [DSL.md](DSL.md), [布局.md](布局.md), [事件.md](事件.md)
 - Component work: [组件.md](组件.md), [DSL.md](DSL.md), [事件.md](事件.md), [布局.md](布局.md)
 - Async/network work: [异步.md](异步.md), [网络.md](网络.md)
 - Platform integration work: [平台能力.md](平台能力.md)
-- Visual/rendering edge cases: [动画.md](动画.md), [渲染流程.md](渲染流程.md), [图片.md](图片.md), [基础图元文本图元.md](基础图元文本图元.md)
+- Visual/rendering edge cases: [动画.md](动画.md), [渲染流程.md](渲染流程.md), [渲染后端架构.md](渲染后端架构.md), [图片.md](图片.md)
 
 Do not bulk-load all docs unless the task truly spans multiple layers.
 
@@ -43,7 +43,7 @@ Write EUI-NEO in this direction:
 4. `core::dsl::Runtime` handles layout, hit-testing, focus, animation, dirty rects, and primitive sync.
 5. Callbacks mutate page state, then Runtime decides whether to re-compose and re-render.
 
-Do not write code as if this were an immediate-mode raw OpenGL app. The DSL is the source of truth.
+Do not write code as if this were an immediate-mode raw GPU app. The DSL is the source of truth.
 
 ## Non-Negotiable Conventions
 
@@ -298,12 +298,12 @@ cmake --build build --config Release
 Target naming rule:
 
 - `examples/gallery.cpp` -> `gallery`
-- `examples/demo.cpp` -> `demo`
+- `examples/eui_demo.cpp` -> `eui_demo`
 - `examples/my_app.cpp` -> `my_app`
 
 ## Good Local References
 
-- `examples/demo.cpp`: smallest DSL page example
+- `examples/eui_demo.cpp`: smallest DSL page example
 - `examples/gallery.cpp`: best broad reference for components, themes, animation, network, and composed layouts
 - `examples/clock.cpp`: custom app styling and large page composition
 - `examples/serial_tool.cpp`: tray-enabled app and dashboard-style composition
