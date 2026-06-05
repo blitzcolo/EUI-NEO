@@ -31,41 +31,45 @@
 
     <main id="top">
       <section class="hero">
-        <div class="hero-media" aria-hidden="true">
-          <img class="hero-shot main-shot" src="../docs/pic/1.jpg" alt="">
-          <img class="hero-shot side-shot one" src="../docs/pic/2.jpg" alt="">
-          <img class="hero-shot side-shot two" src="../docs/pic/4.jpg" alt="">
-          <div class="scanline"></div>
-        </div>
-        <div class="hero-copy">
-          <p class="eyebrow" data-i18n="hero.eyebrow">C++17 · OpenGL / Vulkan · GLFW / SDL2</p>
-          <h1 data-i18n="hero.title">EUI-NEO</h1>
-          <p class="hero-lede" data-i18n="hero.lede">一个面向高性能桌面工具、仪表盘和组件系统的轻量级 UI 框架。</p>
-          <div class="hero-actions">
-            <a class="primary-action" href="#docs" data-i18n="hero.docs">查阅文档</a>
-            <a class="secondary-action" href="https://github.com/sudoevolve/EUI-NEO" data-i18n="hero.github">GitHub</a>
-            <a class="secondary-action" href="https://qm.qq.com/q/vEKvyhA9he" target="_blank" rel="noopener" data-i18n="hero.qq">加入 QQ 群</a>
+        <div class="hero-layout">
+          <div class="hero-copy">
+            <p class="eyebrow" data-i18n="hero.eyebrow">C++17 · OpenGL / Vulkan · GLFW / SDL2</p>
+            <h1 data-i18n="hero.title">EUI-NEO</h1>
+            <p class="hero-lede" data-i18n="hero.lede">一个面向高性能桌面工具、仪表盘和组件系统的轻量级 UI 框架。</p>
+            <div class="hero-actions">
+              <a class="primary-action" href="#docs" data-i18n="hero.docs">查阅文档</a>
+              <a class="secondary-action" href="https://github.com/sudoevolve/EUI-NEO" data-i18n="hero.github">GitHub</a>
+              <a class="secondary-action" href="https://qm.qq.com/q/vEKvyhA9he" target="_blank" rel="noopener" data-i18n="hero.qq">加入 QQ 群</a>
+            </div>
           </div>
-          <div class="hero-stats" aria-label="Highlights">
-            <div>
-              <strong>2</strong>
-              <span data-i18n="stats.window">窗口后端</span>
+          <div class="hero-preview" aria-hidden="true">
+            <div class="preview-bar">
+              <span></span>
+              <span></span>
+              <span></span>
             </div>
-            <div>
-              <strong>2</strong>
-              <span data-i18n="stats.render">渲染后端</span>
-            </div>
-            <div>
-              <strong>20+</strong>
-              <span data-i18n="stats.components">组件</span>
+            <img class="preview-image preview-image-light" src="../docs/pic/1.jpg" alt="">
+            <img class="preview-image preview-image-dark" src="../docs/pic/2.jpg" alt="">
+            <div class="preview-caption">
+              <span>Runtime</span>
+              <span>Dirty Rect</span>
+              <span>GPU Backend</span>
             </div>
           </div>
         </div>
-        <div class="hero-index" aria-hidden="true">
-          <span>Runtime</span>
-          <span>Dirty Rect</span>
-          <span>Render Cache</span>
-          <span>HarfBuzz</span>
+        <div class="hero-stats" aria-label="Highlights">
+          <div>
+            <strong>2</strong>
+            <span data-i18n="stats.window">窗口后端</span>
+          </div>
+          <div>
+            <strong>2</strong>
+            <span data-i18n="stats.render">渲染后端</span>
+          </div>
+          <div>
+            <strong>20+</strong>
+            <span data-i18n="stats.components">组件</span>
+          </div>
         </div>
         <a class="scroll-cue" href="#docs" data-i18n="hero.scroll">查看文档索引</a>
       </section>
