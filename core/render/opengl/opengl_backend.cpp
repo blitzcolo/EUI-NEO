@@ -309,10 +309,14 @@ void OpenGLRenderBackend::setScissor(bool enabled, const core::Rect& rect, int f
         return;
     }
 
-    const GLint x = static_cast<GLint>(std::floor(rect.x));
-    const GLint y = static_cast<GLint>(std::floor(static_cast<float>(framebufferHeight) - rect.y - rect.height));
-    const GLsizei width = static_cast<GLsizei>(std::ceil(rect.width));
-    const GLsizei height = static_cast<GLsizei>(std::ceil(rect.height));
+    const float left = std::floor(rect.x);
+    const float right = std::ceil(rect.x + rect.width);
+    const float top = std::floor(rect.y);
+    const float bottom = std::ceil(rect.y + rect.height);
+    const GLint x = static_cast<GLint>(left);
+    const GLint y = static_cast<GLint>(std::floor(static_cast<float>(framebufferHeight) - bottom));
+    const GLsizei width = static_cast<GLsizei>(std::max(1.0f, right - left));
+    const GLsizei height = static_cast<GLsizei>(std::max(1.0f, bottom - top));
     const GLint safeY = std::max<GLint>(0, y);
     const GLsizei safeWidth = std::max<GLsizei>(1, width);
     const GLsizei safeHeight = std::max<GLsizei>(1, height);

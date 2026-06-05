@@ -175,10 +175,12 @@ void VulkanRenderBackend::transitionImageLayout(VkCommandBuffer commandBuffer,
 }
 
 VkRect2D VulkanRenderBackend::clampScissor(const core::Rect& rect, int windowWidth, int windowHeight) {
-    const float left = std::clamp(rect.x, 0.0f, static_cast<float>(std::max(0, windowWidth)));
-    const float top = std::clamp(rect.y, 0.0f, static_cast<float>(std::max(0, windowHeight)));
-    const float right = std::clamp(rect.x + rect.width, left, static_cast<float>(std::max(0, windowWidth)));
-    const float bottom = std::clamp(rect.y + rect.height, top, static_cast<float>(std::max(0, windowHeight)));
+    const float maxWidth = static_cast<float>(std::max(0, windowWidth));
+    const float maxHeight = static_cast<float>(std::max(0, windowHeight));
+    const float left = std::clamp(std::floor(rect.x), 0.0f, maxWidth);
+    const float top = std::clamp(std::floor(rect.y), 0.0f, maxHeight);
+    const float right = std::clamp(std::ceil(rect.x + rect.width), left, maxWidth);
+    const float bottom = std::clamp(std::ceil(rect.y + rect.height), top, maxHeight);
 
     VkRect2D result{};
     result.offset = {
